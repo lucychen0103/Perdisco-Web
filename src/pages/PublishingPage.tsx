@@ -1,7 +1,7 @@
 import { RefreshCcw, RotateCcw } from "lucide-react";
 import { useApp } from "../state";
 import { PublishPanel } from "./PublishPanel";
-import { Card, Eyebrow, PrimaryButton, Row, Stat, StatusPill } from "../ui";
+import { Card, EmptyState, Eyebrow, PrimaryButton, Row, Stat, StatusPill } from "../ui";
 
 export function PublishingPage() {
   const { releases, projects, navigate, updateRelease, notify } = useApp();
@@ -39,6 +39,12 @@ export function PublishingPage() {
       </Row>
 
       <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 10 }}>
+        {releases.length === 0 ? (
+          <EmptyState
+            title="No releases yet"
+            detail="A release appears here once an approved version is scheduled or published from a project."
+          />
+        ) : null}
         {releases.map((release) => {
           const project = byId(release.projectId);
           if (!project) return null;

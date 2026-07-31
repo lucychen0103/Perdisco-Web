@@ -10,6 +10,7 @@ import { useApp } from "../state";
 import {
   Avatar,
   Card,
+  EmptyState,
   Eyebrow,
   Row,
   SectionTitle,
@@ -84,6 +85,12 @@ export function HomePage() {
         title="What needs attention first"
       />
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {alerts.length === 0 ? (
+          <EmptyState
+            title="Nothing needs attention"
+            detail="Processing failures, rights expiry, failed releases, and high-risk reports surface here."
+          />
+        ) : null}
         {alerts.map((alert) => (
           <Card
             key={alert.id}
@@ -130,6 +137,12 @@ export function HomePage() {
         <div style={{ flex: 2, minWidth: 420 }}>
           <SectionTitle eyebrow="My work" title="Assigned to you" action="All projects" onAction={() => navigate("projects")} />
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {myWork.length === 0 ? (
+              <EmptyState
+                title="No projects assigned to you"
+                detail="Create a source project from the sidebar to start the intake, composition, and review workflow."
+              />
+            ) : null}
             {myWork.map((project) => (
               <Card
                 key={project.id}
@@ -177,6 +190,12 @@ export function HomePage() {
 
           <SectionTitle eyebrow="Team queues" title="Unassigned and overdue" />
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {projects.filter((project) => project.owner !== "Lucy Chen").length === 0 ? (
+              <EmptyState
+                title="No team items"
+                detail="Unassigned, overdue, and blocked work owned by others appears here."
+              />
+            ) : null}
             {projects
               .filter((project) => project.owner !== "Lucy Chen")
               .map((project) => (
@@ -218,6 +237,12 @@ export function HomePage() {
         <div style={{ flex: 1, minWidth: 300 }}>
           <SectionTitle eyebrow="Recent activity" title="Watched changes" />
           <Card style={{ padding: 6 }}>
+            {auditEvents.length === 0 ? (
+              <div style={{ padding: 14, fontSize: 11.5, color: "var(--muted)" }}>
+                No recorded activity yet. Protected actions and edits appear here with the
+                actor, role, and time.
+              </div>
+            ) : null}
             {auditEvents.slice(0, 6).map((event, index) => (
               <div
                 key={event.id}

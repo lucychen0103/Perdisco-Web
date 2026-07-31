@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../state";
-import { Card, Eyebrow, PrimaryButton, Row, Stat, StatusPill } from "../ui";
+import { Card, EmptyState, Eyebrow, PrimaryButton, Row, Stat, StatusPill } from "../ui";
 
 export function MarketsPage() {
   const { markets, projects, updateMarket, notify, navigate } = useApp();
@@ -32,6 +32,12 @@ export function MarketsPage() {
       </Row>
 
       <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 10 }}>
+        {markets.length === 0 ? (
+          <EmptyState
+            title="No prediction markets"
+            detail="Add a Prediction activity to a summary document, then send it here for review before it can open."
+          />
+        ) : null}
         {markets.map((market) => {
           const project = projects.find((item) => item.id === market.projectId);
           const isResolving = resolving === market.id;

@@ -63,7 +63,7 @@ export function buildPublishPayload(
       gradientTo: project.gradient[1],
     },
     orientation: {
-      lead: textBlocks[0]?.text ?? project.orientation,
+      lead: textBlocks[0]?.text ?? "",
       close: textBlocks.length > 1 ? textBlocks[textBlocks.length - 1].text : "",
     },
     statements: orderedStatementIds.flatMap((id) => {

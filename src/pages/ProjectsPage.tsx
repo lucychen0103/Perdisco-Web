@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../state";
 import type { LifecycleState, SourceFormat } from "../types";
-import { Card, Eyebrow, Row, StatusPill } from "../ui";
+import { Card, EmptyState, Eyebrow, Row, StatusPill } from "../ui";
 
 const LIFECYCLES: (LifecycleState | "All")[] = [
   "All",
@@ -88,6 +88,16 @@ export function ProjectsPage() {
       </Row>
 
       <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+        {filtered.length === 0 ? (
+          <EmptyState
+            title={projects.length === 0 ? "No source projects yet" : "No projects match these filters"}
+            detail={
+              projects.length === 0
+                ? "Use Create source project in the sidebar to start with source identity, ownership, and rights basis."
+                : "Clear a filter to see the rest of the workspace."
+            }
+          />
+        ) : null}
         {filtered.map((project) => {
           const openFindings = findings.filter(
             (finding) => finding.projectId === project.id && finding.state === "Open",

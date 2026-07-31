@@ -62,7 +62,6 @@ type AppState = {
       blocks: SummaryBlock[];
       statements: AdminStatement[];
       activities: ActivityDraft[];
-      orientation?: string;
     },
     mode: "replace" | "append",
   ) => void;
@@ -233,7 +232,6 @@ export function AppProvider({ children }: PropsWithChildren) {
           return {
             ...project,
             blocks,
-            orientation: payload.orientation ?? project.orientation,
             updatedAt: "Just now",
           };
         }),

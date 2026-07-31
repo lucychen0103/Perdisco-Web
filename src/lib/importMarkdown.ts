@@ -11,11 +11,11 @@ import type {
  * Parses an editorial markdown file into composer blocks.
  *
  * Convention (deliberately forgiving — see FORMAT_GUIDE / SAMPLE_MARKDOWN):
- *   ---
- *   orientation: one-line editorial orientation
- *   ---
+ *   A `---` front-matter block is ignored: it carries source identity the editor
+ *   copies into Intake & rights, none of which the composer consumes.
  *
- *   Plain paragraphs become summary-text blocks.
+ *   Plain paragraphs become summary-text blocks. The first one is what the
+ *   mobile app shows as the summary's opening paragraph.
  *
  *   ## FACT — statement text
  *   locator: 58:03
@@ -30,7 +30,6 @@ import type {
  */
 
 export type ParsedDocument = {
-  orientation?: string;
   blocks: SummaryBlock[];
   statements: AdminStatement[];
   activities: ActivityDraft[];
@@ -185,15 +184,9 @@ export function parseMarkdown(
   const blocks: SummaryBlock[] = [];
   const statements: AdminStatement[] = [];
   const activities: ActivityDraft[] = [];
-  let orientation: string | undefined;
 
-  const { frontMatter, sections } = splitSections(source);
-
-  frontMatter.forEach((line) => {
-    const meta = line.match(/^([A-Za-z][A-Za-z \-_]*)\s*:\s*(.*)$/);
-    if (!meta) return;
-    if (/^orientation$/i.test(meta[1].trim())) orientation = meta[2].trim();
-  });
+  // Front matter is source identity for the editor, not composer content.
+  const { sections } = splitSections(source);
 
   sections.forEach((section) => {
     // --- Unlabeled preamble / prose-only section -> summary text blocks
@@ -387,7 +380,6 @@ export function parseMarkdown(
   });
 
   return {
-    orientation,
     blocks,
     statements,
     activities,
@@ -401,7 +393,9 @@ export function parseMarkdown(
 }
 
 export const SAMPLE_MARKDOWN = `---
-orientation: A veteran robotics investor explains why demos mislead and how outcome pricing reshapes the market.
+title: What actually makes a robotics company investable?
+creator: Dr. Maya Chen
+publisher: Machines at Work
 ---
 
 # What actually makes a robotics company investable?

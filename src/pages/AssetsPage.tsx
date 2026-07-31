@@ -9,7 +9,7 @@ import {
 import { useMemo, useState } from "react";
 import { assets } from "../data";
 import { useApp } from "../state";
-import { Card, Eyebrow, Row, StatusPill } from "../ui";
+import { Card, EmptyState, Eyebrow, Row, StatusPill } from "../ui";
 
 const KINDS = [
   "All",
@@ -79,6 +79,12 @@ export function AssetsPage() {
       </Row>
 
       <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+        {filtered.length === 0 ? (
+          <EmptyState
+            title="No assets"
+            detail="Media, transcripts, documents, and rights evidence appear here once a source project is processed."
+          />
+        ) : null}
         {filtered.map((asset) => {
           const project = projects.find((item) => item.id === asset.projectId);
           const Icon = iconFor(asset.kind);

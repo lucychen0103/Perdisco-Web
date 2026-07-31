@@ -374,21 +374,6 @@ export function ProjectDetailPage({ id }: { id: string }) {
       {tab === "Composer" ? (
         <div style={{ display: "flex", gap: 24, marginTop: 20, alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <Card style={{ marginBottom: 16 }}>
-              <FieldLabel>
-                Editorial orientation — shown before the summary document
-              </FieldLabel>
-              <textarea
-                value={project.orientation}
-                onChange={(event) =>
-                  updateProject(project.id, { orientation: event.target.value })
-                }
-                rows={2}
-                style={textareaStyle}
-                placeholder="What the source covers, why it matters, scope or limitations"
-              />
-            </Card>
-
             <Row style={{ justifyContent: "space-between", marginBottom: 10 }} gap={12}>
               <div>
                 <Eyebrow style={{ fontSize: 9 }}>Summary document</Eyebrow>
@@ -815,7 +800,6 @@ export function ProjectDetailPage({ id }: { id: string }) {
                 blocks: parsed.blocks,
                 statements: parsed.statements,
                 activities: parsed.activities,
-                orientation: parsed.orientation,
               },
               mode,
             );
@@ -2101,11 +2085,6 @@ function ImportMarkdownModal({
             <span className="pill" style={{ background: "var(--lime)", color: "var(--lime-dark)" }}>
               {parsed.counts.activities} activities
             </span>
-            {parsed.orientation ? (
-              <span className="pill" style={{ background: "var(--paper-muted)", color: "var(--muted)" }}>
-                orientation set
-              </span>
-            ) : null}
           </Row>
 
           <div

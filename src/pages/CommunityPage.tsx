@@ -39,6 +39,12 @@ export function CommunityPage() {
 
       <div style={{ display: "flex", gap: 18, marginTop: 22, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 340, display: "flex", flexDirection: "column", gap: 8 }}>
+          {cases.length === 0 ? (
+            <EmptyState
+              title="No moderation cases"
+              detail="Reports, appeals, and account reviews arrive here once published sources have discussion."
+            />
+          ) : null}
           {cases.map((item) => (
             <Card
               key={item.id}

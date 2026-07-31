@@ -154,7 +154,6 @@ export type SourceProject = {
   priority: "High" | "Normal" | "Low";
   targetRelease: string;
   updatedAt: string;
-  orientation: string;
   blocks: SummaryBlock[];
   rights: RightsRecord;
   processing: ProcessingStep[];

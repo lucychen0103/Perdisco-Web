@@ -613,7 +613,6 @@ function useAddProject() {
       priority: "Normal",
       targetRelease: "Unscheduled",
       updatedAt: "Just now",
-      orientation: "",
       blocks: [],
       rights: {
         owner: input.creator,
