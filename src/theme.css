@@ -1,0 +1,145 @@
+/* Perdisco design tokens — mirrors src/theme.ts in the consumer app */
+:root {
+  --background: #f5f2ea;
+  --paper: #fffdf8;
+  --paper-muted: #f0ede4;
+  --ink: #17211c;
+  --muted: #68716b;
+  --subtle: #90968f;
+  --line: #dedcd3;
+  --forest: #1d4a38;
+  --forest-dark: #123428;
+  --lime: #dcea86;
+  --lime-dark: #536715;
+  --blue: #ddebfa;
+  --blue-dark: #295f87;
+  --peach: #f4ddc9;
+  --peach-dark: #8c502d;
+  --purple: #e8ddf3;
+  --purple-dark: #674b7d;
+  --danger: #b64b42;
+  --token: #f6c955;
+  --white: #ffffff;
+
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-body: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: Menlo, Consolas, monospace;
+
+  --shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+input,
+textarea,
+select {
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+
+a {
+  color: var(--forest);
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--lime);
+  color: var(--forest-dark);
+}
+
+/* ---------- shared primitives ---------- */
+
+.eyebrow {
+  color: var(--forest);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.icon-button {
+  width: 38px;
+  height: 38px;
+  border-radius: 19px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.icon-button:hover {
+  opacity: 0.75;
+}
+
+.icon-button:active {
+  transform: scale(0.96);
+}
+
+/* thin scrollbars to keep the editorial feel */
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}

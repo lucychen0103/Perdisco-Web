@@ -1,0 +1,15 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+*.tsbuildinfo
+
+# Local environment — never commit real keys; set these in Vercel instead
+.env
+.env.local
+.env.*.local
+
+# Tooling
+.vercel
+.DS_Store
