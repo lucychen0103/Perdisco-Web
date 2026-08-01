@@ -111,19 +111,37 @@ export function ProjectDetailPage({ id }: { id: string }) {
 
   const publishBlockers = useMemo(() => {
     if (!project) return [];
-    const reasons: string[] = [];
+    const reasons: { text: string; tab: (typeof TABS)[number]; kind: "blocker" | "other" }[] = [];
     project.gates.forEach((gate) => {
       if (gate.status !== "Approved") {
-        reasons.push(`${gate.name} gate is ${gate.status.toLowerCase()}`);
+        reasons.push({
+          text: `${gate.name} gate is ${gate.status.toLowerCase()}`,
+          tab: "Review gates",
+          kind: "other",
+        });
       }
     });
-    project.blockers.forEach((blocker) => reasons.push(`${blocker.object}: ${blocker.reason}`));
+    project.blockers.forEach((blocker) =>
+      reasons.push({
+        text: `${blocker.object}: ${blocker.reason}`,
+        tab: "Composer",
+        kind: "blocker",
+      }),
+    );
     if (project.rights.status !== "Cleared") {
-      reasons.push(`Rights record is ${project.rights.status.toLowerCase()}`);
+      reasons.push({
+        text: `Rights record is ${project.rights.status.toLowerCase()}`,
+        tab: "Intake & rights",
+        kind: "other",
+      });
     }
     statements.forEach((statement) => {
       if (statement.elaborationState === "Empty") {
-        reasons.push(`Statement “${statement.text.slice(0, 40)}…” has no elaboration`);
+        reasons.push({
+          text: `Statement "${statement.text.slice(0, 40)}…" has no elaboration`,
+          tab: "Composer",
+          kind: "other",
+        });
       }
     });
     return reasons;
@@ -245,7 +263,10 @@ export function ProjectDetailPage({ id }: { id: string }) {
 
   const publish = () => {
     if (publishBlockers.length > 0) {
-      notify(`Publication blocked — ${publishBlockers.length} unresolved requirement(s)`);
+      const [first, ...rest] = publishBlockers;
+      notify(
+        `Publication blocked — ${first.text}${rest.length ? ` (+${rest.length} more, see below)` : ""}`,
+      );
       return;
     }
     addRelease({
@@ -317,12 +338,13 @@ export function ProjectDetailPage({ id }: { id: string }) {
         </Row>
       </Row>
 
-      {project.blockers.length > 0 ? (
+      {publishBlockers.length > 0 ? (
         <Card style={{ marginTop: 16, borderColor: "var(--danger)", padding: 14 }}>
           <Row gap={9}>
             <CircleAlert size={16} color="var(--danger)" />
             <span style={{ fontSize: 12, fontWeight: 700, color: "var(--danger)" }}>
-              Blocked — every blocking condition names its owner and resolution
+              Publication blocked — {publishBlockers.length} unresolved requirement
+              {publishBlockers.length > 1 ? "s" : ""}
             </span>
           </Row>
           {project.blockers.map((blocker) => (
@@ -344,6 +366,36 @@ export function ProjectDetailPage({ id }: { id: string }) {
               </div>
             </div>
           ))}
+          {publishBlockers
+            .filter((item) => item.kind === "other")
+            .map((item, index) => (
+              <div
+                key={index}
+                style={{
+                  marginTop: 10,
+                  paddingTop: 10,
+                  borderTop: "1px solid var(--line)",
+                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                }}
+              >
+                <span>{item.text}</span>
+                <button
+                  onClick={() => setTab(item.tab)}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "var(--forest)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Go to {item.tab} →
+                </button>
+              </div>
+            ))}
         </Card>
       ) : null}
 
