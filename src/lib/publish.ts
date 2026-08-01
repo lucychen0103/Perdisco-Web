@@ -1,5 +1,11 @@
 import { supabase } from "./supabase";
-import type { AdminStatement, SourceProject, StatementType } from "../types";
+import type {
+  ActivityDraft,
+  ActivityMode,
+  AdminStatement,
+  SourceProject,
+  StatementType,
+} from "../types";
 
 const TYPE_CODES: Record<StatementType, string> = {
   FACT: "fact",
@@ -8,12 +14,27 @@ const TYPE_CODES: Record<StatementType, string> = {
   "MENTAL MODEL": "mental_model",
 };
 
+// Modes the consumer contract accepts. Poll has no consumer rendering and
+// Prediction is cut from consumer v1, so both publish as nothing.
+const ACTIVITY_MODE_CODES: Partial<Record<ActivityMode, string>> = {
+  Flashcard: "flashcard",
+  "Applied quiz": "quiz",
+  Matching: "matching",
+};
+
+const ACTIVITY_EYEBROWS: Partial<Record<ActivityMode, string>> = {
+  Flashcard: "APPLIED RECALL",
+  "Applied quiz": "APPLIED QUIZ",
+  Matching: "APPLIED MATCHING",
+};
+
 export type PublishResult = {
   summaryId: string;
   releaseId: string;
   versionNumber: number;
   contentHash: string;
   statementCount: number;
+  activityCount: number;
 };
 
 /**
@@ -26,6 +47,7 @@ export type PublishResult = {
 export function buildPublishPayload(
   project: SourceProject,
   statements: AdminStatement[],
+  activities: ActivityDraft[],
   publishedBy: string,
   note?: string,
 ) {
@@ -38,8 +60,17 @@ export function buildPublishPayload(
         block.kind === "statement",
     )
     .map((block) => block.statementId);
+  const orderedActivityIds = project.blocks
+    .filter(
+      (block): block is Extract<typeof block, { kind: "activity" }> =>
+        block.kind === "activity",
+    )
+    .map((block) => block.activityId);
 
   const byId = new Map(statements.map((statement) => [statement.id, statement]));
+  const activityById = new Map(
+    activities.map((activity) => [activity.id, activity]),
+  );
 
   return {
     publishedBy,
@@ -84,12 +115,39 @@ export function buildPublishPayload(
         },
       ];
     }),
+    activities: orderedActivityIds.flatMap((id) => {
+      const activity = activityById.get(id);
+      const mode = activity ? ACTIVITY_MODE_CODES[activity.mode] : undefined;
+      // Unknown drafts and unpublishable modes (Poll, Prediction) are dropped,
+      // mirroring how TYPE_CODES gates statement types.
+      if (!activity || !mode) return [];
+      const statement = byId.get(activity.statementId);
+      const eyebrowBase = ACTIVITY_EYEBROWS[activity.mode] ?? "PRACTICE";
+      return [
+        {
+          stableKey: activity.id,
+          mode,
+          statementStableKey: activity.statementId,
+          eyebrow: statement?.topic
+            ? `${eyebrowBase} · ${statement.topic.toUpperCase()}`
+            : eyebrowBase,
+          prompt: activity.prompt,
+          explanation: activity.explanation ?? "",
+          reward: activity.reward ?? 0,
+          answer: activity.answer ?? "",
+          options: activity.options ?? [],
+          correctIndex: activity.correctIndex ?? null,
+          matchingRows: activity.matchingRows ?? [],
+        },
+      ];
+    }),
   };
 }
 
 export async function publishProject(
   project: SourceProject,
   statements: AdminStatement[],
+  activities: ActivityDraft[],
   publishedBy: string,
   note?: string,
 ): Promise<PublishResult> {
@@ -99,7 +157,7 @@ export async function publishProject(
     );
   }
 
-  const payload = buildPublishPayload(project, statements, publishedBy, note);
+  const payload = buildPublishPayload(project, statements, activities, publishedBy, note);
   if (payload.statements.length === 0) {
     throw new Error("This summary has no statements to publish.");
   }

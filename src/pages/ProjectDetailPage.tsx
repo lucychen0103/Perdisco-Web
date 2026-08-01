@@ -26,6 +26,7 @@ import type {
   ActivityDraft,
   ActivityMode,
   AdminStatement,
+  RightsStatus,
   SourceProject,
   StatementType,
   SummaryBlock,
@@ -48,13 +49,11 @@ import {
 
 const TABS = ["Composer", "Intake & rights", "Processing", "Review gates", "Activities"] as const;
 const STATEMENT_TYPES: StatementType[] = ["FACT", "OPINION", "FORECAST", "MENTAL MODEL"];
-const ACTIVITY_MODES: ActivityMode[] = [
-  "Flashcard",
-  "Applied quiz",
-  "Matching",
-  "Poll",
-  "Prediction",
-];
+// Poll and Prediction are not offered for new activities: neither publishes to
+// the consumer app (polls have no consumer rendering; predictions are cut from
+// consumer v1). Existing drafts in those modes stay visible with a badge.
+const ACTIVITY_MODES: ActivityMode[] = ["Flashcard", "Applied quiz", "Matching"];
+const UNPUBLISHABLE_ACTIVITY_MODES: ActivityMode[] = ["Poll", "Prediction"];
 
 const uid = (prefix: string) =>
   `${prefix}-${Date.now().toString(36)}${Math.floor(Math.random() * 100)}`;
@@ -571,63 +570,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
       ) : null}
 
       {tab === "Intake & rights" ? (
-        <div
-          style={{ display: "flex", gap: 18, marginTop: 20, flexWrap: "wrap", maxWidth: 1000 }}
-        >
-          <Card style={{ flex: 1, minWidth: 340 }}>
-            <Eyebrow style={{ fontSize: 9, marginBottom: 10 }}>Source identity</Eyebrow>
-            <KeyValue label="Title" value={project.title} />
-            <KeyValue label="Creator" value={`${project.creator} — ${project.creatorRole}`} />
-            <KeyValue label="Publication" value={project.publisher} />
-            <KeyValue label="Canonical URL" value={project.canonicalUrl} />
-            <KeyValue label="Published" value={project.published} />
-            <KeyValue label="Language" value={project.language} />
-            <KeyValue label="Duration" value={project.duration} />
-            <Eyebrow style={{ fontSize: 9, margin: "16px 0 10px" }}>Playback contract</Eyebrow>
-            <KeyValue label="Primary source" value={project.playback.primary} />
-            {project.playback.fallback ? (
-              <KeyValue label="Fallback" value={project.playback.fallback} />
-            ) : null}
-            <KeyValue label="Transcript" value={project.playback.transcriptSource} />
-            <Row gap={8} style={{ marginTop: 8 }}>
-              <StatusPill value={project.playback.transcriptState} />
-              {project.format === "Podcast" ? (
-                <span style={{ fontSize: 10, color: "var(--muted)" }}>
-                  Timestamp deep links must seek within a 3-second tolerance
-                </span>
-              ) : null}
-            </Row>
-          </Card>
-          <Card style={{ flex: 1, minWidth: 340 }}>
-            <Row style={{ justifyContent: "space-between", marginBottom: 10 }}>
-              <Eyebrow style={{ fontSize: 9 }}>Rights record</Eyebrow>
-              <StatusPill value={project.rights.status} />
-            </Row>
-            <KeyValue label="Owner" value={project.rights.owner} />
-            <KeyValue label="Basis" value={project.rights.basis} />
-            <KeyValue label="Approved uses" value={project.rights.approvedUses.join(" · ")} />
-            <KeyValue label="Restrictions" value={project.rights.restrictions} />
-            <KeyValue label="Media behavior" value={project.rights.mediaBehavior} />
-            <KeyValue label="Expiry" value={project.rights.expiry} />
-            <KeyValue label="Takedown contact" value={project.rights.takedownContact} />
-            <KeyValue label="Reviewed by" value={project.rights.reviewer} />
-            <div
-              style={{
-                marginTop: 12,
-                padding: 11,
-                borderRadius: 12,
-                background: "var(--paper-muted)",
-                fontSize: 10.5,
-                color: "var(--muted)",
-                lineHeight: 1.5,
-              }}
-            >
-              Consumer playback behavior is determined by this record — not by the presence
-              of a URL or timestamp. Publication is blocked if the record is missing, expired,
-              or incompatible with the intended behavior.
-            </div>
-          </Card>
-        </div>
+        <IntakeRightsTab project={project} updateProject={updateProject} notify={notify} />
       ) : null}
 
       {tab === "Processing" ? (
@@ -1453,7 +1396,12 @@ function ActivityModal({
     <Modal eyebrow="Inline learning activity" title="Activity" width={640} onClose={onClose}>
       <FieldLabel>Activity type</FieldLabel>
       <Row gap={6} wrap>
-        {ACTIVITY_MODES.map((mode) => (
+        {[
+          ...ACTIVITY_MODES,
+          // Keep an existing Poll/Prediction draft's mode visible instead of
+          // silently deselecting authors' work.
+          ...UNPUBLISHABLE_ACTIVITY_MODES.filter((mode) => mode === activity.mode),
+        ].map((mode) => (
           <button
             key={mode}
             onClick={() => switchMode(mode)}
@@ -1472,6 +1420,19 @@ function ActivityModal({
       <div style={{ fontSize: 10.5, color: "var(--subtle)", margin: "6px 0 12px" }}>
         {MODE_HINTS[activity.mode]}
       </div>
+      {UNPUBLISHABLE_ACTIVITY_MODES.includes(activity.mode) ? (
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--danger)",
+            margin: "0 0 12px",
+            fontWeight: 600,
+          }}
+        >
+          {activity.mode} activities are not part of the consumer contract and
+          will not publish. Switch to Flashcard, Applied quiz, or Matching.
+        </div>
+      ) : null}
 
       <FieldLabel>Prompt</FieldLabel>
       <textarea
@@ -1825,6 +1786,433 @@ function PairsEditor({
       >
         <Plus size={12} /> Add pair
       </button>
+    </div>
+  );
+}
+
+const RIGHTS_BASIS_OPTIONS = [
+  "Platform terms — pending review",
+  "Written permission on file",
+  "Open-access license",
+  "First-party Perdisco content",
+  "Unknown — requires rights review",
+];
+
+const RIGHTS_STATUS_OPTIONS: RightsStatus[] = [
+  "Cleared",
+  "Pending review",
+  "Expiring",
+  "Missing",
+  "Restricted",
+];
+
+function IntakeRightsTab({
+  project,
+  updateProject,
+  notify,
+}: {
+  project: SourceProject;
+  updateProject: (id: string, patch: Partial<SourceProject>) => void;
+  notify: (message: string) => void;
+}) {
+  const [editingSource, setEditingSource] = useState(false);
+  const [editingRights, setEditingRights] = useState(false);
+  const [sourceDraft, setSourceDraft] = useState(() => makeSourceDraft(project));
+  const [rightsDraft, setRightsDraft] = useState(() => makeRightsDraft(project));
+
+  const setSource = (patch: Partial<ReturnType<typeof makeSourceDraft>>) =>
+    setSourceDraft((prev) => ({ ...prev, ...patch }));
+  const setRights = (patch: Partial<ReturnType<typeof makeRightsDraft>>) =>
+    setRightsDraft((prev) => ({ ...prev, ...patch }));
+
+  const saveSource = () => {
+    const title = sourceDraft.title.trim() || project.title;
+    const creator = sourceDraft.creator.trim() || "Unknown creator";
+    updateProject(project.id, {
+      title,
+      shortTitle: title.length > 32 ? `${title.slice(0, 32)}…` : title,
+      creator,
+      creatorRole: sourceDraft.creatorRole.trim() || "—",
+      publisher: sourceDraft.publisher.trim() || creator,
+      canonicalUrl: sourceDraft.canonicalUrl.trim() || "—",
+      published: sourceDraft.published.trim() || "—",
+      language: sourceDraft.language.trim() || "English",
+      duration: sourceDraft.duration.trim() || "—",
+      initials:
+        creator
+          .split(" ")
+          .map((word) => word[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase() || "??",
+      playback: {
+        ...project.playback,
+        primary: sourceDraft.playbackPrimary.trim() || "—",
+        fallback: sourceDraft.playbackFallback.trim() || undefined,
+      },
+      updatedAt: "Just now",
+    });
+    notify("Source identity updated");
+    setEditingSource(false);
+  };
+
+  const saveRights = () => {
+    updateProject(project.id, {
+      rights: {
+        ...project.rights,
+        owner: rightsDraft.owner.trim() || "—",
+        basis: rightsDraft.basis,
+        approvedUses: rightsDraft.approvedUses
+          .split(",")
+          .map((use) => use.trim())
+          .filter(Boolean),
+        restrictions: rightsDraft.restrictions.trim() || "—",
+        mediaBehavior: rightsDraft.mediaBehavior.trim() || "Undetermined",
+        expiry: rightsDraft.expiry.trim() || "—",
+        takedownContact: rightsDraft.takedownContact.trim() || "—",
+        reviewer: rightsDraft.reviewer.trim() || "—",
+        status: rightsDraft.status,
+      },
+      updatedAt: "Just now",
+    });
+    notify("Rights record updated");
+    setEditingRights(false);
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 18, marginTop: 20, flexWrap: "wrap", maxWidth: 1000 }}>
+      <Card style={{ flex: 1, minWidth: 340 }}>
+        <Row style={{ justifyContent: "space-between", marginBottom: 10 }}>
+          <Eyebrow style={{ fontSize: 9 }}>Source identity</Eyebrow>
+          {editingSource ? (
+            <Row gap={8}>
+              <PrimaryButton
+                small
+                variant="light"
+                label="Cancel"
+                onClick={() => setEditingSource(false)}
+              />
+              <PrimaryButton small label="Save" onClick={saveSource} />
+            </Row>
+          ) : (
+            <PrimaryButton
+              small
+              variant="light"
+              label="Edit"
+              onClick={() => {
+                setSourceDraft(makeSourceDraft(project));
+                setEditingSource(true);
+              }}
+            />
+          )}
+        </Row>
+        {editingSource ? (
+          <>
+            <EditRow
+              label="Title"
+              value={sourceDraft.title}
+              onChange={(title) => setSource({ title })}
+            />
+            <EditRow
+              label="Creator"
+              value={sourceDraft.creator}
+              onChange={(creator) => setSource({ creator })}
+            />
+            <EditRow
+              label="Creator role"
+              value={sourceDraft.creatorRole}
+              onChange={(creatorRole) => setSource({ creatorRole })}
+            />
+            <EditRow
+              label="Publication"
+              value={sourceDraft.publisher}
+              onChange={(publisher) => setSource({ publisher })}
+            />
+            <EditRow
+              label="Canonical URL"
+              value={sourceDraft.canonicalUrl}
+              onChange={(canonicalUrl) => setSource({ canonicalUrl })}
+              placeholder="https://"
+            />
+            <EditRow
+              label="Published"
+              value={sourceDraft.published}
+              onChange={(published) => setSource({ published })}
+              placeholder="e.g. 12 Jun 2026"
+            />
+            <EditRow
+              label="Language"
+              value={sourceDraft.language}
+              onChange={(language) => setSource({ language })}
+            />
+            <EditRow
+              label="Duration"
+              value={sourceDraft.duration}
+              onChange={(duration) => setSource({ duration })}
+              placeholder="e.g. 1h 42m"
+            />
+            <Eyebrow style={{ fontSize: 9, margin: "16px 0 10px" }}>Playback contract</Eyebrow>
+            <EditRow
+              label="Primary source"
+              value={sourceDraft.playbackPrimary}
+              onChange={(playbackPrimary) => setSource({ playbackPrimary })}
+              placeholder="e.g. RSS · episode audio"
+            />
+            <EditRow
+              label="Fallback"
+              value={sourceDraft.playbackFallback}
+              onChange={(playbackFallback) => setSource({ playbackFallback })}
+              placeholder="Optional"
+            />
+          </>
+        ) : (
+          <>
+            <KeyValue label="Title" value={project.title} />
+            <KeyValue label="Creator" value={`${project.creator} — ${project.creatorRole}`} />
+            <KeyValue label="Publication" value={project.publisher} />
+            <KeyValue label="Canonical URL" value={project.canonicalUrl} />
+            <KeyValue label="Published" value={project.published} />
+            <KeyValue label="Language" value={project.language} />
+            <KeyValue label="Duration" value={project.duration} />
+            <Eyebrow style={{ fontSize: 9, margin: "16px 0 10px" }}>Playback contract</Eyebrow>
+            <KeyValue label="Primary source" value={project.playback.primary} />
+            {project.playback.fallback ? (
+              <KeyValue label="Fallback" value={project.playback.fallback} />
+            ) : null}
+          </>
+        )}
+      </Card>
+      <Card style={{ flex: 1, minWidth: 340 }}>
+        <Row style={{ justifyContent: "space-between", marginBottom: 10 }}>
+          <Eyebrow style={{ fontSize: 9 }}>Rights record</Eyebrow>
+          {editingRights ? (
+            <Row gap={8}>
+              <PrimaryButton
+                small
+                variant="light"
+                label="Cancel"
+                onClick={() => setEditingRights(false)}
+              />
+              <PrimaryButton small label="Save" onClick={saveRights} />
+            </Row>
+          ) : (
+            <Row gap={8}>
+              <StatusPill value={project.rights.status} />
+              <PrimaryButton
+                small
+                variant="light"
+                label="Edit"
+                onClick={() => {
+                  setRightsDraft(makeRightsDraft(project));
+                  setEditingRights(true);
+                }}
+              />
+            </Row>
+          )}
+        </Row>
+        {editingRights ? (
+          <>
+            <EditRow
+              label="Owner"
+              value={rightsDraft.owner}
+              onChange={(owner) => setRights({ owner })}
+            />
+            <EditSelectRow
+              label="Basis"
+              value={rightsDraft.basis}
+              options={
+                RIGHTS_BASIS_OPTIONS.includes(rightsDraft.basis)
+                  ? RIGHTS_BASIS_OPTIONS
+                  : [rightsDraft.basis, ...RIGHTS_BASIS_OPTIONS]
+              }
+              onChange={(basis) => setRights({ basis })}
+            />
+            <EditRow
+              label="Approved uses"
+              value={rightsDraft.approvedUses}
+              onChange={(approvedUses) => setRights({ approvedUses })}
+              placeholder="Comma-separated, e.g. Ingest, Excerpt, Playback"
+            />
+            <EditRow
+              label="Restrictions"
+              value={rightsDraft.restrictions}
+              onChange={(restrictions) => setRights({ restrictions })}
+            />
+            <EditRow
+              label="Media behavior"
+              value={rightsDraft.mediaBehavior}
+              onChange={(mediaBehavior) => setRights({ mediaBehavior })}
+              placeholder="e.g. Stream from source · no rehosting"
+            />
+            <EditRow
+              label="Expiry"
+              value={rightsDraft.expiry}
+              onChange={(expiry) => setRights({ expiry })}
+              placeholder="e.g. 31 Dec 2026 or —"
+            />
+            <EditRow
+              label="Takedown contact"
+              value={rightsDraft.takedownContact}
+              onChange={(takedownContact) => setRights({ takedownContact })}
+            />
+            <EditRow
+              label="Reviewed by"
+              value={rightsDraft.reviewer}
+              onChange={(reviewer) => setRights({ reviewer })}
+            />
+            <EditSelectRow
+              label="Status"
+              value={rightsDraft.status}
+              options={RIGHTS_STATUS_OPTIONS}
+              onChange={(status) => setRights({ status: status as RightsStatus })}
+            />
+          </>
+        ) : (
+          <>
+            <KeyValue label="Owner" value={project.rights.owner} />
+            <KeyValue label="Basis" value={project.rights.basis} />
+            <KeyValue label="Approved uses" value={project.rights.approvedUses.join(" · ")} />
+            <KeyValue label="Restrictions" value={project.rights.restrictions} />
+            <KeyValue label="Media behavior" value={project.rights.mediaBehavior} />
+            <KeyValue label="Expiry" value={project.rights.expiry} />
+            <KeyValue label="Takedown contact" value={project.rights.takedownContact} />
+            <KeyValue label="Reviewed by" value={project.rights.reviewer} />
+          </>
+        )}
+        <div
+          style={{
+            marginTop: 12,
+            padding: 11,
+            borderRadius: 12,
+            background: "var(--paper-muted)",
+            fontSize: 10.5,
+            color: "var(--muted)",
+            lineHeight: 1.5,
+          }}
+        >
+          Consumer playback behavior is determined by this record — not by the presence
+          of a URL or timestamp. Publication is blocked if the record is missing, expired,
+          or incompatible with the intended behavior.
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function makeSourceDraft(project: SourceProject) {
+  return {
+    title: project.title,
+    creator: project.creator,
+    creatorRole: project.creatorRole === "—" ? "" : project.creatorRole,
+    publisher: project.publisher,
+    canonicalUrl: project.canonicalUrl === "—" ? "" : project.canonicalUrl,
+    published: project.published === "—" ? "" : project.published,
+    language: project.language,
+    duration: project.duration === "—" ? "" : project.duration,
+    playbackPrimary: project.playback.primary === "—" ? "" : project.playback.primary,
+    playbackFallback: project.playback.fallback ?? "",
+  };
+}
+
+function makeRightsDraft(project: SourceProject) {
+  return {
+    owner: project.rights.owner,
+    basis: project.rights.basis,
+    approvedUses: project.rights.approvedUses.join(", "),
+    restrictions: project.rights.restrictions,
+    mediaBehavior: project.rights.mediaBehavior,
+    expiry: project.rights.expiry === "—" ? "" : project.rights.expiry,
+    takedownContact: project.rights.takedownContact,
+    reviewer: project.rights.reviewer === "—" ? "" : project.rights.reviewer,
+    status: project.rights.status,
+  };
+}
+
+function EditRow({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 12,
+        alignItems: "center",
+        padding: "4px 0",
+        borderBottom: "1px solid var(--line)",
+      }}
+    >
+      <span
+        style={{
+          width: 128,
+          flexShrink: 0,
+          fontSize: 10.5,
+          color: "var(--muted)",
+          fontWeight: 600,
+        }}
+      >
+        {label}
+      </span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        style={{ ...inputStyle, minHeight: 32, padding: "5px 9px", fontSize: 12 }}
+      />
+    </div>
+  );
+}
+
+function EditSelectRow({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: readonly string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 12,
+        alignItems: "center",
+        padding: "4px 0",
+        borderBottom: "1px solid var(--line)",
+      }}
+    >
+      <span
+        style={{
+          width: 128,
+          flexShrink: 0,
+          fontSize: 10.5,
+          color: "var(--muted)",
+          fontWeight: 600,
+        }}
+      >
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        style={{ ...inputStyle, minHeight: 32, padding: "5px 9px", fontSize: 12 }}
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

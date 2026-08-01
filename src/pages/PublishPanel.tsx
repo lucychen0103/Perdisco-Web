@@ -12,7 +12,7 @@ import { Card, Eyebrow, FieldLabel, PrimaryButton, Row, inputStyle } from "../ui
  * immutable version and release rather than editing live content.
  */
 export function PublishPanel() {
-  const { projects, statementsFor, notify } = useApp();
+  const { projects, statementsFor, activitiesFor, notify } = useApp();
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -63,10 +63,11 @@ export function PublishPanel() {
       const result = await publishProject(
         project,
         statementsFor(projectId),
+        activitiesFor(projectId),
         session?.user.email ?? "admin",
       );
       notify(
-        `Published ${project.shortTitle} v${result.versionNumber} · ${result.statementCount} statements live`,
+        `Published ${project.shortTitle} v${result.versionNumber} · ${result.statementCount} statements · ${result.activityCount ?? 0} activities live`,
       );
     } catch (publishError) {
       setError((publishError as Error).message);

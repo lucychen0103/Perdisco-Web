@@ -354,6 +354,16 @@ export function parseMarkdown(
       activity.marketId = meta.market;
     }
 
+    if (activityMode === "Poll" || activityMode === "Prediction") {
+      warnings.push(
+        `${activityMode} “${section.heading.slice(0, 40)}…” imported as a draft but will NOT publish — ${
+          activityMode === "Poll"
+            ? "polls have no consumer rendering yet"
+            : "predictions are cut from consumer v1"
+        }. Switch it to Flashcard, Applied quiz, or Matching.`,
+      );
+    }
+
     activities.push(activity);
     blocks.push({ kind: "activity", id: uid("blk"), activityId: id });
   });

@@ -554,7 +554,7 @@ function CreateProjectModal({ onClose }: { onClose: () => void }) {
         </select>
         <div style={{ fontSize: 10, color: "var(--subtle)", marginBottom: 18 }}>
           {format === "Podcast"
-            ? "Podcasts additionally require a time-aligned transcript plus a playable RSS episode or YouTube source before composition."
+            ? "Podcasts additionally require a playable RSS episode or YouTube source before composition."
             : "Ownership defaults to the Perdisco organization · Editorial workspace."}
         </div>
 
@@ -629,15 +629,6 @@ function useAddProject() {
       },
       processing: [
         { name: "Media inspection", status: "Waiting", detail: "Awaiting assets" },
-        ...(input.format === "Podcast"
-          ? [
-              {
-                name: "Transcription",
-                status: "Waiting" as const,
-                detail: "Time-aligned transcript required",
-              },
-            ]
-          : []),
         { name: "Preflight", status: "Waiting", detail: "—" },
       ],
       gates: [
@@ -649,18 +640,9 @@ function useAddProject() {
         { name: "Market", status: "Not started" },
         { name: "Accessibility & technical", status: "Not started" },
       ],
-      blockers:
-        input.format === "Podcast"
-          ? [
-              {
-                object: "Transcript",
-                reason: "Podcast intake requires a time-aligned transcript before composition",
-                responsibleRole: "Producer",
-                resolution: "Import publisher transcript or clear rights for machine transcription",
-                overridable: false,
-              },
-            ]
-          : [],
+      // Transcript intake is disabled for now: podcasts get no transcription step
+      // or transcript blocker, and the intake tab hides transcript fields.
+      blockers: [],
       version: 1,
       playback: {
         primary: input.format === "Podcast" ? "RSS · unresolved" : "—",
