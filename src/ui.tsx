@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, PropsWithChildren, ReactNode } from "react";
 import type { StatementType } from "./types";
 
@@ -363,6 +364,201 @@ export function PrimaryButton({
       {icon}
       {label}
     </button>
+  );
+}
+
+export type SplitButtonItem = {
+  label: string;
+  detail?: string;
+  onClick: () => void;
+  disabled?: boolean;
+};
+
+/**
+ * A primary action with secondary actions folded into a menu — used where one
+ * control advances a project down several mutually exclusive paths (publish now,
+ * schedule, park as draft) and only one of them should read as the default.
+ */
+export function SplitButton({
+  label,
+  onClick,
+  items,
+  icon,
+  variant = "dark",
+  disabled,
+}: {
+  label: string;
+  onClick?: () => void;
+  items: SplitButtonItem[];
+  icon?: ReactNode;
+  variant?: "dark" | "light" | "lime" | "danger";
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const styles: Record<string, CSSProperties> = {
+    dark: { background: "var(--forest)", color: "var(--white)" },
+    lime: { background: "var(--lime-dark)", color: "var(--white)" },
+    danger: { background: "var(--danger)", color: "var(--white)" },
+    light: {
+      background: "var(--paper)",
+      color: "var(--forest)",
+      border: "1px solid var(--line)",
+    },
+  };
+  const tone = styles[variant];
+  const divider =
+    variant === "light" ? "var(--line)" : "rgba(255, 255, 255, 0.24)";
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative", display: "inline-flex" }}>
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "stretch",
+          borderRadius: 15,
+          overflow: "hidden",
+          opacity: disabled ? 0.38 : 1,
+          ...tone,
+        }}
+      >
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          style={{
+            minHeight: 44,
+            padding: "0 16px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            color: "inherit",
+            background: "none",
+            border: "none",
+            cursor: disabled ? "not-allowed" : "pointer",
+          }}
+        >
+          {icon}
+          {label}
+        </button>
+        <span style={{ width: 1, background: divider, flexShrink: 0 }} />
+        <button
+          onClick={() => setOpen((prev) => !prev)}
+          disabled={disabled}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="More publish actions"
+          style={{
+            minHeight: 44,
+            padding: "0 11px",
+            display: "inline-flex",
+            alignItems: "center",
+            color: "inherit",
+            background: "none",
+            border: "none",
+            cursor: disabled ? "not-allowed" : "pointer",
+          }}
+        >
+          <ChevronDownGlyph open={open} />
+        </button>
+      </div>
+
+      {open ? (
+        <div
+          role="menu"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            right: 0,
+            zIndex: 40,
+            minWidth: 244,
+            background: "var(--white)",
+            border: "1px solid var(--line)",
+            borderRadius: 14,
+            boxShadow: "0 12px 30px rgba(20, 40, 30, 0.14)",
+            padding: 5,
+          }}
+        >
+          {items.map((item) => (
+            <button
+              key={item.label}
+              role="menuitem"
+              disabled={item.disabled}
+              onClick={() => {
+                setOpen(false);
+                item.onClick();
+              }}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                padding: "9px 10px",
+                borderRadius: 10,
+                background: "none",
+                border: "none",
+                cursor: item.disabled ? "not-allowed" : "pointer",
+                opacity: item.disabled ? 0.4 : 1,
+              }}
+              onMouseEnter={(event) => {
+                if (!item.disabled)
+                  event.currentTarget.style.background = "var(--paper-muted)";
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.background = "none";
+              }}
+            >
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--forest)" }}>
+                {item.label}
+              </div>
+              {item.detail ? (
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+                  {item.detail}
+                </div>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ChevronDownGlyph({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        transform: open ? "rotate(180deg)" : "none",
+        transition: "transform 120ms ease",
+      }}
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
   );
 }
 

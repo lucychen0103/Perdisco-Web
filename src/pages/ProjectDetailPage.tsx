@@ -20,6 +20,8 @@ import {
   parseMarkdown,
   type ParsedDocument,
 } from "../lib/importMarkdown";
+import { publishProject } from "../lib/publish";
+import { supabase } from "../lib/supabase";
 import { ElaborationPreview, PhoneFrame, SummaryPreview } from "../preview/PhonePreview";
 import { useApp } from "../state";
 import type {
@@ -40,6 +42,7 @@ import {
   PrimaryButton,
   Row,
   SectionTitle,
+  SplitButton,
   StatusPill,
   TypeBadge,
   inputStyle,
@@ -103,6 +106,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
   );
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [importOpen, setImportOpen] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
 
   const projectFindings = findings.filter((finding) => finding.projectId === id);
   const suggestions = aiSuggestions.filter(
@@ -261,12 +265,70 @@ export function ProjectDetailPage({ id }: { id: string }) {
     notify("Suggestion accepted as editable draft — attributed to Lucy Chen");
   };
 
-  const publish = () => {
-    if (publishBlockers.length > 0) {
-      const [first, ...rest] = publishBlockers;
+  // Publication paths share one blocker check: nothing leaves the composer for a
+  // reader-visible state while a gate, rights record, or elaboration is unresolved.
+  const reportBlockers = () => {
+    const [first, ...rest] = publishBlockers;
+    notify(
+      `Publication blocked — ${first.text}${rest.length ? ` (+${rest.length} more, see below)` : ""}`,
+    );
+  };
+
+  /**
+   * The only action in the app that writes to the shared database. Everything
+   * else on this page is local editorial state, so a failure here has to surface
+   * rather than leave the project looking published when nothing was stored.
+   */
+  const publishNow = async () => {
+    if (publishBlockers.length > 0) return reportBlockers();
+    if (!supabase) {
       notify(
-        `Publication blocked — ${first.text}${rest.length ? ` (+${rest.length} more, see below)` : ""}`,
+        "Supabase is not configured — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then restart.",
       );
+      return;
+    }
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      notify("Sign in on the Publishing tab first — publishing needs an editorial account.");
+      return;
+    }
+    const publisher = data.session.user.email ?? "admin";
+    setPublishBusy(true);
+    try {
+      const result = await publishProject(project, statements, activities, publisher);
+      updateProject(project.id, {
+        state: "Published",
+        version: result.versionNumber,
+        updatedAt: "Just now",
+      });
+      addRelease({
+        id: uid("r"),
+        projectId: project.id,
+        version: result.versionNumber,
+        state: "Live",
+        when: "Just now",
+        publisher,
+        cohort: "All users",
+        health: "Healthy",
+      });
+      notify(
+        `Published v${result.versionNumber} — ${result.statementCount} statements, ${result.activityCount} activities live`,
+      );
+    } catch (error) {
+      notify(`Publish failed — ${(error as Error).message}`);
+    } finally {
+      setPublishBusy(false);
+    }
+  };
+
+  /**
+   * Hands the approved version to the release window instead of going live now.
+   * Local until a publisher releases it, so no database write happens here.
+   */
+  const sendToScheduling = () => {
+    if (publishBlockers.length > 0) return reportBlockers();
+    if (project.state === "Scheduled") {
+      notify(`v${project.version} is already queued for the next release window.`);
       return;
     }
     addRelease({
@@ -274,13 +336,25 @@ export function ProjectDetailPage({ id }: { id: string }) {
       projectId: project.id,
       version: project.version,
       state: "Scheduled",
-      when: "Next window · Aug 1, 09:00",
+      when: `Next window · ${project.targetRelease}`,
       publisher: "Lucy Chen",
       cohort: "All users",
       health: "—",
     });
-    updateProject(project.id, { state: "Scheduled" });
-    notify(`Immutable v${project.version} scheduled — audit event recorded`);
+    updateProject(project.id, { state: "Scheduled", updatedAt: "Just now" });
+    notify(
+      `Immutable v${project.version} sent to scheduling — release now from Publishing when the window opens`,
+    );
+  };
+
+  /** Parks the project back in the composer; always available, blockers or not. */
+  const saveDraft = () => {
+    if (project.state === "Draft") {
+      notify("Already a draft — composer edits are kept as you type.");
+      return;
+    }
+    updateProject(project.id, { state: "Draft", updatedAt: "Just now" });
+    notify(`v${project.version} saved as draft — withdrawn from the review queue`);
   };
 
   return (
@@ -327,13 +401,28 @@ export function ProjectDetailPage({ id }: { id: string }) {
               notify("Preflight passed — review gates opened");
             }}
           />
-          <PrimaryButton
+          <SplitButton
             label={
-              publishBlockers.length
-                ? `Publish (${publishBlockers.length} blockers)`
-                : "Publish version"
+              publishBusy
+                ? "Publishing…"
+                : publishBlockers.length
+                  ? `Publish (${publishBlockers.length} blockers)`
+                  : "Publish version"
             }
-            onClick={publish}
+            disabled={publishBusy}
+            onClick={publishNow}
+            items={[
+              {
+                label: "Send to scheduling",
+                detail: `Queue v${project.version} for ${project.targetRelease}`,
+                onClick: sendToScheduling,
+              },
+              {
+                label: "Save draft",
+                detail: "Park in the composer and leave the review queue",
+                onClick: saveDraft,
+              },
+            ]}
           />
         </Row>
       </Row>
