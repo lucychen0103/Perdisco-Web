@@ -8,6 +8,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
   X,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { MarketsPage } from "./pages/MarketsPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { PublishingPage } from "./pages/PublishingPage";
+import { QuestionsPage } from "./pages/QuestionsPage";
 import { ReviewPage } from "./pages/ReviewPage";
 import { useApp } from "./state";
 import type { SourceFormat, SourceProject } from "./types";
@@ -30,6 +32,7 @@ const NAV = [
   { key: "home", label: "Home", icon: House, hint: "My work and alerts" },
   { key: "projects", label: "Projects", icon: FolderOpen, hint: "All source projects" },
   { key: "review", label: "Review", icon: ClipboardCheck, hint: "Approval queues" },
+  { key: "questions", label: "Questions", icon: Sparkles, hint: "AI question drafts" },
   { key: "publishing", label: "Publishing", icon: Send, hint: "Releases and health" },
   { key: "community", label: "Community", icon: MessagesSquare, hint: "Moderation" },
   { key: "markets", label: "Markets", icon: TrendingUp, hint: "Prediction operations" },
@@ -206,6 +209,7 @@ export function App() {
           {(section === "projects" || section === "") && <ProjectsPage />}
           {section === "project" && <ProjectDetailPage id={route.split("/")[1]} />}
           {section === "review" && <ReviewPage />}
+          {section === "questions" && <QuestionsPage />}
           {section === "publishing" && <PublishingPage />}
           {section === "community" && <CommunityPage />}
           {section === "markets" && <MarketsPage />}
