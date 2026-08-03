@@ -194,12 +194,32 @@ export async function publishProject(
   return data as PublishResult;
 }
 
-export async function withdrawProject(projectId: string, reason?: string) {
+export type WithdrawResult =
+  | { published: true; withdrawnReleases: number }
+  | { published: false };
+
+/**
+ * Takes every live release for a project off the consumer surface.
+ *
+ * `published: false` means the summary was never published. That answer comes
+ * from the database rather than `project.state`, which can read "Draft" while a
+ * published version is still live — saving a draft is local-only, so it never
+ * touches publishing.releases. admin_withdraw_summary raises P0002 for a
+ * stable_key it does not know, and that is the authoritative "nothing is live".
+ */
+export async function withdrawProject(
+  projectId: string,
+  reason?: string,
+): Promise<WithdrawResult> {
   if (!supabase) throw new Error("Supabase is not configured.");
   const { data, error } = await supabase.rpc("admin_withdraw_summary", {
     summary_key: projectId,
     reason,
   });
-  if (error) throw new Error(error.message);
-  return data;
+  if (error) {
+    if (error.code === "P0002") return { published: false };
+    throw new Error(error.message);
+  }
+  const payload = data as { withdrawnReleases?: number } | null;
+  return { published: true, withdrawnReleases: payload?.withdrawnReleases ?? 0 };
 }

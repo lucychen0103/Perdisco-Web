@@ -90,6 +90,7 @@ type AppState = {
   removeBlock: (projectId: string, blockId: string) => void;
   updateProject: (id: string, patch: Partial<SourceProject>) => void;
   addProject: (project: SourceProject) => void;
+  removeProject: (id: string) => void;
   importDocument: (
     projectId: string,
     payload: {
@@ -426,6 +427,28 @@ export function AppProvider({ children }: PropsWithChildren) {
     setProjects((prev) => [project, ...prev]);
   }, []);
 
+  /**
+   * Drops a project and everything scoped to it. Statements and activities are
+   * serialized inside the project's workspace doc, so they have to go with it;
+   * findings and releases are project-scoped records that would otherwise be
+   * unreachable rows pointing at a project that no longer exists.
+   *
+   * Markets and moderation cases are deliberately kept. They reference a project
+   * but represent obligations to readers — staked tokens, reports about user
+   * conduct — that should not disappear because an editor deleted a source.
+   *
+   * This removes the draft only. Withdrawing the published copy is the caller's
+   * job (see withdrawProject); the two are ordered so nothing is deleted here
+   * until the consumer surface is already clear.
+   */
+  const removeProject = useCallback((id: string) => {
+    setProjects((prev) => prev.filter((project) => project.id !== id));
+    setStatements((prev) => prev.filter((statement) => statement.projectId !== id));
+    setActivities((prev) => prev.filter((activity) => activity.projectId !== id));
+    setFindings((prev) => prev.filter((finding) => finding.projectId !== id));
+    setReleases((prev) => prev.filter((release) => release.projectId !== id));
+  }, []);
+
   const importDocument = useCallback<AppState["importDocument"]>(
     (projectId, payload, mode) => {
       setProjects((prev) =>
@@ -540,6 +563,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       removeBlock,
       updateProject,
       addProject,
+      removeProject,
       importDocument,
       setGate,
       setFindingState,
@@ -574,6 +598,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       removeBlock,
       updateProject,
       addProject,
+      removeProject,
       importDocument,
       setGate,
       setFindingState,

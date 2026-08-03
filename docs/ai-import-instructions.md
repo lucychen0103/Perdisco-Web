@@ -36,23 +36,32 @@ except a one-paragraph note listing anything you were unsure about. Suggested fi
 
 ## The format
 
-The importer reads a plain markdown file. Three things become blocks, in the order they
-appear in the file:
+The importer reads a plain markdown file. Blocks appear in the order they appear in the
+file, and **heading depth decides which screen an activity lives on**:
 
-1. **Plain paragraphs** → summary-text blocks (the connective reading prose)
+1. **Plain paragraphs before the first statement** → summary-text blocks (the opening prose)
 2. **`## LABEL — text` headings with a statement label** → statements
-3. **`## LABEL — text` headings with an activity label** → learning activities
+3. **Plain paragraphs under a statement** → that statement's elaboration text
+4. **`### LABEL — prompt` activity headings under a statement** → activities **inside that
+   statement's elaboration** — they render on the statement's own screen, interleaved with
+   its elaboration paragraphs in file order
+5. **`## LABEL — prompt` activity headings** → activities on the **summary screen**
+6. **`## TEXT — prose`** → a summary-text block; the way back to connective summary prose
+   once a statement section has begun
 
 ### Skeleton
 
 ```markdown
 ---
-orientation: One sentence on what this source covers and why it matters.
+title: Episode or article title
+creator: Name of the speaker or author
 ---
 
 # Episode or article title
 
-Opening paragraph that frames the argument. This becomes the first summary-text block.
+Opening paragraph that frames the argument. This becomes the first summary-text
+block, which is what the mobile app shows as the summary's opening paragraph — so
+make it carry the orientation a reader needs before the first statement.
 
 ## FACT — A robot that works 90% of the time is often less useful than it sounds.
 locator: 58:03
@@ -64,7 +73,13 @@ In a 100-step workflow, a 90% per-step success rate compounds into near-certain 
 Buyers pay for completed jobs, so reliability, recovery, and escalation are part of the
 product rather than afterthoughts.
 
-A connecting paragraph that moves the argument forward becomes another summary-text block.
+### FLASHCARD — What matters more than per-action success rate?
+answer: Completed jobs — per-step reliability compounds across a workflow
+reward: 10
+
+A paragraph here continues the same statement's elaboration, after the flashcard.
+
+## TEXT — A connecting line that moves the argument to the next statement.
 
 ## QUIZ — Rank these industries by tolerance for a 10% failure rate.
 * Crop monitoring → Inventory scanning → Hotel delivery → Surgery (correct)
@@ -73,6 +88,10 @@ A connecting paragraph that moves the argument forward becomes another summary-t
 explanation: Crop monitoring tolerates missed passes; surgery requires near-zero failure.
 reward: 20
 ```
+
+In that skeleton the flashcard (`###`) renders **inside** the FACT statement's screen,
+between its two elaboration paragraphs, while the quiz (`##`) renders on the summary
+screen after the connecting `## TEXT` line.
 
 ### Statement labels
 
@@ -92,6 +111,17 @@ reward: 20
 | `MATCHING` | 2+ `left \| right` pair bullets |
 | `POLL` | 2+ `*` options, no correct answer (non-scored) |
 | `PREDICTION` | `market: <market-id>` if a market already exists; otherwise omit |
+
+### Where an activity lives
+
+- `### LABEL — prompt` (three `#`) → **inside the statement above it**, on that
+  statement's own screen. Use this when the activity practises that one statement.
+  Its `explanation:` must be an explicit line — plain paragraphs in a `###` section
+  are elaboration text for the statement, not activity feedback.
+- `## LABEL — prompt` (two `#`) → on the **summary screen**, at that point in the
+  reading flow. Use this for synthesis across several statements. Plain paragraphs
+  in a `##` activity section become its `explanation:` if none is given.
+- A `###` activity with no statement above it imports to the summary with a warning.
 
 ### Metadata lines
 
@@ -120,6 +150,8 @@ The parser is forgiving, so don't worry about exact punctuation:
 - Correct answers: `(correct)`, `(answer)`, `(key)` trailing, or `[x]` leading
 - Matching pairs split on `|`, `->`, `→`, or `=>`
 - A single `# Heading` before any content is treated as the source title and skipped
+- Heading depth only matters for activities: `##` = summary screen, `###` = inside the
+  statement above. Statements always use `##`; `TEXT` also accepts `SUMMARY` or `PROSE`
 
 ---
 
@@ -147,7 +179,9 @@ it matters, and what qualifies it. Include uncertainty where the source hedges. 
 restate the statement in different words.
 
 **Use summary text as connective tissue.** One or two sentences between statements
-explaining how the argument moves. Not a summary of the statement that follows.
+explaining how the argument moves — written as `## TEXT — …` blocks, since a plain
+paragraph after a statement belongs to that statement's elaboration. Not a summary of
+the statement that follows.
 
 **Activities test application, not wording.** Ask the learner to rank, compare, apply, or
 predict consequences. Never ask them to recall the exact phrasing. Distractors must be
@@ -156,22 +190,22 @@ clearly wrong on the merits — if two options are defensible, the item is broke
 ### Shape and length
 
 - **5–9 statements** for a typical episode; long interviews may reach 12
-- **A summary-text block before the first statement and after the last**, plus one
-  between most statements
-- **2–4 activities**, spread through the document rather than clustered at the end
+- **A summary-text block before the first statement and after the last** (`## TEXT` for
+  the closing one), plus one between most statements
+- **2–4 activities.** Prefer `###` inline activities on the statement they practise;
+  reserve `##` summary activities for synthesis across statements
 - Order statements by argument, not chronology — the strongest framing idea first
 
 ---
 
 ## Handling the RSS feed
 
-Extract the episode identity from the feed and put it in the frontmatter for the editor.
-The importer only reads `orientation:`; everything else is reference material the editor
-copies into **Intake & rights**, so accuracy still matters.
+Extract the episode identity from the feed and put it in the frontmatter. The importer
+reads it and offers it as a patch to **Intake & rights**, which the editor confirms on
+import — so accuracy matters, and a wrong URL is worse than an absent one.
 
 ```markdown
 ---
-orientation: A veteran robotics investor on why demos mislead and how outcome pricing reshapes the market.
 title: What actually makes a robotics company investable?
 creator: Dr. Maya Chen
 publisher: Machines at Work
@@ -179,12 +213,37 @@ published: 2026-07-28
 duration: 2:14:00
 episode_url: https://example.com/ep214
 enclosure: https://cdn.example.com/ep214.mp3
-guid: maw-ep-214
 ---
 ```
 
-Resolve the **episode**, not just the show feed. If the feed contains several episodes
-and it's ambiguous which one the transcript belongs to, ask rather than guess.
+| Key | Becomes | Notes |
+| --- | --- | --- |
+| `title` | Title | Also the short title shown in lists |
+| `creator` | Creator | Also the fallback `attribution:` for statements |
+| `creator_role` | Creator role | e.g. `Robotics investor` |
+| `publisher` | Publication | The show, network, or masthead |
+| `published` | Published | ISO (`2026-07-28`) or RSS `pubDate` both work |
+| `duration` | Duration | `2:14:00` or seconds; rendered as `2h 14m` |
+| `episode_url` | Canonical URL | Where a reader goes to see the original |
+| `enclosure` | **Playback source** | The direct media file — see below |
+| `language`, `category` | Language, Category | Optional |
+| `format`, `medium` | Format, Medium | Only if the feed makes it unambiguous |
+
+**`enclosure:` is the field playback depends on.** It must be the direct URL of the
+audio or video file — the `<enclosure url="…">` in the RSS item, not the episode page,
+not the show page, and not a feed URL. It becomes the summary's playback source, which
+drives the Listen control and the per-statement source-moment player. Anything that is
+not an `http(s)` URL is rejected rather than stored, because a placeholder in that field
+produces a dead player. If you cannot find a real enclosure, leave the key out and say so
+in your note.
+
+The importer resolves no feeds: a `feed:`/`rss:` key is recorded as reference only, so
+resolve the **episode** yourself. If the feed contains several episodes and it's
+ambiguous which one the transcript belongs to, ask rather than guess.
+
+For playback to land on the right moment, statement `locator:` values must be `mm:ss` or
+`h:mm:ss`. A locator the player cannot parse still imports — its player just opens at
+0:00.
 
 Note that rights are decided by a human: nothing in this file grants permission to
 stream, embed, or clip the audio. Never assert a rights status.
@@ -197,9 +256,12 @@ stream, embed, or clip the audio. Never assert a rights status.
 - [ ] Every `OPINION` and `FORECAST` has `attribution:`
 - [ ] No statement reproduces source wording; `moment:` is the only verbatim text
 - [ ] No invented sources, URLs, numbers, or quotes
+- [ ] `enclosure:` is a real direct media URL, or is absent and noted
 - [ ] Every quiz has exactly one `(correct)` option and an `explanation:`
 - [ ] Every matching block has at least two `left | right` pairs
-- [ ] Summary text opens and closes the document
+- [ ] Statement-specific activities use `###` under their statement; only synthesis
+      activities use `##`
+- [ ] Summary text opens the document, and a `## TEXT` block closes it
 - [ ] Statements are ordered by argument, and each has an elaboration paragraph
 - [ ] Output is one fenced markdown block, plus a short note on anything uncertain
 

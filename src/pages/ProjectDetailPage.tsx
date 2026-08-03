@@ -25,7 +25,7 @@ import {
   parseMarkdown,
   type ParsedDocument,
 } from "../lib/importMarkdown";
-import { publishProject } from "../lib/publish";
+import { publishProject, withdrawProject } from "../lib/publish";
 import { supabase } from "../lib/supabase";
 import { ElaborationPreview, PhoneFrame, SummaryPreview } from "../preview/PhonePreview";
 import { useApp } from "../state";
@@ -91,12 +91,15 @@ export function ProjectDetailPage({ id }: { id: string }) {
     moveBlock,
     removeBlock,
     updateProject,
+    removeProject,
     setGate,
     findings,
     markets,
     setFindingState,
     notify,
+    releases,
     addRelease,
+    updateRelease,
     importDocument,
   } = useApp();
 
@@ -119,6 +122,9 @@ export function ProjectDetailPage({ id }: { id: string }) {
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [importOpen, setImportOpen] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [withdrawBusy, setWithdrawBusy] = useState(false);
 
   const projectFindings = findings.filter((finding) => finding.projectId === id);
   const suggestions = aiSuggestions.filter(
@@ -368,14 +374,104 @@ export function ProjectDetailPage({ id }: { id: string }) {
     );
   };
 
-  /** Parks the project back in the composer; always available, blockers or not. */
+  /**
+   * Parks the project back in the composer; always available, blockers or not.
+   * Local editorial state only — it never touches publishing.releases, so a
+   * published version keeps serving readers until it is explicitly withdrawn.
+   * The toast has to say so: "withdrawn from the review queue" read as if this
+   * unpublished the project, which it does not.
+   */
   const saveDraft = () => {
     if (project.state === "Draft") {
       notify("Already a draft — composer edits are kept as you type.");
       return;
     }
+    const wasPublished = project.state === "Published";
     updateProject(project.id, { state: "Draft", updatedAt: "Just now" });
-    notify(`v${project.version} saved as draft — withdrawn from the review queue`);
+    notify(
+      wasPublished
+        ? `v${project.version} saved as draft — the published version stays live until you withdraw it`
+        : `v${project.version} saved as draft — left the review queue`,
+    );
+  };
+
+  /**
+   * Takes the live version off the consumer app while keeping the draft. This is
+   * the only action that unpublishes: saveDraft moves local state only, and
+   * deleting is for when the project should stop existing entirely.
+   */
+  const withdrawNow = async () => {
+    if (!supabase) {
+      notify("Supabase is not configured — withdrawing needs the database.");
+      return;
+    }
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      notify("Sign in on the Publishing tab first — withdrawing needs an editorial account.");
+      return;
+    }
+    setWithdrawBusy(true);
+    try {
+      const result = await withdrawProject(
+        project.id,
+        `Withdrawn by ${data.session.user.email ?? "admin"}`,
+      );
+      if (!result.published) {
+        notify("Nothing to withdraw — this project has no published version.");
+        return;
+      }
+      updateProject(project.id, { state: "Withdrawn", updatedAt: "Just now" });
+      releases
+        .filter((release) => release.projectId === project.id && release.state === "Live")
+        .forEach((release) => updateRelease(release.id, { state: "Withdrawn" }));
+      notify(
+        `Withdrawn — ${result.withdrawnReleases} release${
+          result.withdrawnReleases === 1 ? "" : "s"
+        } pulled from the consumer app`,
+      );
+    } catch (error) {
+      notify(`Withdraw failed — ${(error as Error).message}`);
+    } finally {
+      setWithdrawBusy(false);
+    }
+  };
+
+  /**
+   * Deletes the draft, taking the published copy off the consumer surface first
+   * when there is one. The order is the point: withdraw, then delete. Deleting
+   * first would strip the only handle for withdrawing — the project id is the
+   * summary's stable key — and leave a live summary nobody can reach from here.
+   * So a failed withdrawal aborts the delete entirely.
+   */
+  const deleteProject = async () => {
+    setDeleteBusy(true);
+    try {
+      let outcome = "local workspace only";
+      if (supabase) {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          notify("Sign in on the Publishing tab first — deleting checks for a live version.");
+          return;
+        }
+        const result = await withdrawProject(
+          project.id,
+          `Project deleted by ${data.session.user.email ?? "admin"}`,
+        );
+        outcome = result.published
+          ? `withdrew ${result.withdrawnReleases} live release${
+              result.withdrawnReleases === 1 ? "" : "s"
+            }`
+          : "nothing was published";
+      }
+      removeProject(project.id);
+      setDeleteOpen(false);
+      navigate("projects");
+      notify(`Deleted "${project.shortTitle}" — ${outcome}`);
+    } catch (error) {
+      notify(`Delete failed, nothing was removed — ${(error as Error).message}`);
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   return (
@@ -426,11 +522,13 @@ export function ProjectDetailPage({ id }: { id: string }) {
             label={
               publishBusy
                 ? "Publishing…"
-                : publishBlockers.length
-                  ? `Publish (${publishBlockers.length} blockers)`
-                  : "Publish version"
+                : withdrawBusy
+                  ? "Withdrawing…"
+                  : publishBlockers.length
+                    ? `Publish (${publishBlockers.length} blockers)`
+                    : "Publish version"
             }
-            disabled={publishBusy}
+            disabled={publishBusy || withdrawBusy}
             onClick={publishNow}
             items={[
               {
@@ -443,8 +541,16 @@ export function ProjectDetailPage({ id }: { id: string }) {
                 detail: "Park in the composer and leave the review queue",
                 onClick: saveDraft,
               },
+              {
+                label: "Withdraw from app",
+                detail: "Take the live version off the consumer app, keep the draft",
+                onClick: withdrawNow,
+              },
             ]}
           />
+          <RowIconButton title="Delete project" onClick={() => setDeleteOpen(true)}>
+            <Trash2 size={13} color="var(--rose)" />
+          </RowIconButton>
         </Row>
       </Row>
 
@@ -907,7 +1013,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
         <ImportMarkdownModal
           project={project}
           onClose={() => setImportOpen(false)}
-          onApply={(parsed, mode) => {
+          onApply={(parsed, mode, applySource) => {
             importDocument(
               project.id,
               {
@@ -917,10 +1023,23 @@ export function ProjectDetailPage({ id }: { id: string }) {
               },
               mode,
             );
+            // Source identity is a separate record from the document, so it is
+            // patched separately and only when the editor left it checked.
+            const sourceApplied = applySource && Boolean(parsed.source);
+            if (sourceApplied) {
+              updateProject(project.id, {
+                ...parsed.source!.patch,
+                updatedAt: "Just now",
+              });
+            }
             setSelectedBlockId(undefined);
             setImportOpen(false);
             notify(
-              `${mode === "replace" ? "Replaced" : "Appended"} — ${parsed.counts.text} text, ${parsed.counts.statements} statements, ${parsed.counts.activities} activities imported as drafts`,
+              `${mode === "replace" ? "Replaced" : "Appended"} — ${parsed.counts.text} text, ${parsed.counts.statements} statements, ${parsed.counts.activities} activities imported as drafts${
+                sourceApplied
+                  ? `, ${parsed.source!.fields.length} source fields updated`
+                  : ""
+              }`,
             );
           }}
         />
@@ -1007,6 +1126,63 @@ export function ProjectDetailPage({ id }: { id: string }) {
           }}
           onClose={() => setEditingBlockId(undefined)}
         />
+      ) : null}
+
+      {deleteOpen ? (
+        <Modal
+          eyebrow="Delete project"
+          title={`Delete "${project.shortTitle}"?`}
+          width={470}
+          onClose={() => {
+            if (!deleteBusy) setDeleteOpen(false);
+          }}
+        >
+          <div style={{ fontSize: 12.5, lineHeight: "19px" }}>
+            This removes the project from the workspace permanently. It cannot be undone.
+          </div>
+          <div
+            style={{
+              marginTop: 13,
+              padding: 13,
+              borderRadius: 13,
+              background: "var(--paper-muted)",
+              fontSize: 12,
+              lineHeight: "19px",
+            }}
+          >
+            <b>Deleted</b>
+            <div style={{ color: "var(--muted)", marginTop: 2 }}>
+              The summary document · {statements.length} statement
+              {statements.length === 1 ? "" : "s"} · {activities.length} activit
+              {activities.length === 1 ? "y" : "ies"} · {projectFindings.length} finding
+              {projectFindings.length === 1 ? "" : "s"} · its release history
+            </div>
+            <b style={{ display: "block", marginTop: 9 }}>Kept</b>
+            <div style={{ color: "var(--muted)", marginTop: 2 }}>
+              Markets and moderation cases that reference this project — they carry
+              obligations to readers, so they outlive the source.
+            </div>
+          </div>
+          <div style={{ marginTop: 13, fontSize: 12.5, lineHeight: "19px" }}>
+            If a published version is live, it is withdrawn from the consumer app first.
+            If that withdrawal fails, nothing is deleted.
+          </div>
+          <Row gap={8} style={{ marginTop: 18, justifyContent: "flex-end" }}>
+            <PrimaryButton
+              label="Cancel"
+              variant="light"
+              disabled={deleteBusy}
+              onClick={() => setDeleteOpen(false)}
+            />
+            <PrimaryButton
+              label={deleteBusy ? "Deleting…" : "Delete project"}
+              variant="danger"
+              icon={<Trash2 size={14} />}
+              disabled={deleteBusy}
+              onClick={deleteProject}
+            />
+          </Row>
+        </Modal>
       ) : null}
     </div>
   );
@@ -2424,7 +2600,7 @@ function IntakeRightsTab({
               label="Primary source"
               value={sourceDraft.playbackPrimary}
               onChange={(playbackPrimary) => setSource({ playbackPrimary })}
-              placeholder="e.g. RSS · episode audio"
+              placeholder="https://… direct media file — the app plays this"
             />
             <EditRow
               label="Fallback"
@@ -2761,12 +2937,17 @@ function ImportMarkdownModal({
 }: {
   project: SourceProject;
   onClose: () => void;
-  onApply: (parsed: ParsedDocument, mode: "replace" | "append") => void;
+  onApply: (
+    parsed: ParsedDocument,
+    mode: "replace" | "append",
+    applySource: boolean,
+  ) => void;
 }) {
   const [source, setSource] = useState("");
   const [fileName, setFileName] = useState<string | undefined>();
   const [dragging, setDragging] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [applySource, setApplySource] = useState(true);
 
   const parsed = useMemo(
     () => (source.trim() ? parseMarkdown(source, project) : undefined),
@@ -2928,6 +3109,94 @@ function ImportMarkdownModal({
         />
       </div>
 
+      {parsed?.source ? (
+        <div
+          style={{
+            marginTop: 12,
+            borderRadius: 14,
+            border: "1px solid var(--line)",
+            overflow: "hidden",
+          }}
+        >
+          <Row
+            style={{
+              justifyContent: "space-between",
+              padding: "8px 12px",
+              background: "var(--paper-muted)",
+              borderBottom: "1px solid var(--line)",
+            }}
+            gap={10}
+          >
+            <Eyebrow style={{ fontSize: 9 }}>Source identity & playback</Eyebrow>
+            <Toggle
+              label="Apply to Intake & rights"
+              checked={applySource}
+              onChange={setApplySource}
+            />
+          </Row>
+          <div style={{ opacity: applySource ? 1 : 0.45 }}>
+            {parsed.source.fields.map((field) => (
+              <div
+                key={field.label}
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  padding: "6px 12px",
+                  alignItems: "baseline",
+                }}
+              >
+                <span
+                  style={{
+                    width: 110,
+                    flexShrink: 0,
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    color: "var(--muted)",
+                  }}
+                >
+                  {field.label}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11.5,
+                    minWidth: 0,
+                    overflowWrap: "anywhere",
+                    color: "var(--ink)",
+                  }}
+                >
+                  {field.value}
+                </span>
+                {field.label === "Playback source" ? (
+                  <span
+                    className="pill"
+                    style={{
+                      marginLeft: "auto",
+                      flexShrink: 0,
+                      background: "var(--lime)",
+                      color: "var(--lime-dark)",
+                    }}
+                  >
+                    In-app player
+                  </span>
+                ) : null}
+              </div>
+            ))}
+            <div
+              style={{
+                padding: "7px 12px 9px",
+                fontSize: 10.5,
+                lineHeight: 1.5,
+                color: parsed.source.playableUrl ? "var(--subtle)" : "var(--peach-dark)",
+              }}
+            >
+              {parsed.source.playableUrl
+                ? "The playback source is the file the app streams — the summary's Listen control and each statement's source-moment player. Rights still decide whether it may be used."
+                : "No playable media URL in this file, so the app will render no player. Add one under Intake & rights → Playback contract."}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {parsed ? (
         <div style={{ marginTop: 12 }}>
           <Row gap={8} wrap style={{ marginBottom: 8 }}>
@@ -3059,7 +3328,7 @@ function ImportMarkdownModal({
             label="Append"
             variant="light"
             disabled={!parsed || parsed.blocks.length === 0}
-            onClick={() => parsed && onApply(parsed, "append")}
+            onClick={() => parsed && onApply(parsed, "append", applySource)}
           />
           <PrimaryButton
             label={
@@ -3068,7 +3337,7 @@ function ImportMarkdownModal({
                 : "Import"
             }
             disabled={!parsed || parsed.blocks.length === 0}
-            onClick={() => parsed && onApply(parsed, "replace")}
+            onClick={() => parsed && onApply(parsed, "replace", applySource)}
           />
         </Row>
       </Row>
