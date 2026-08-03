@@ -48,7 +48,7 @@ export function MarketsPage() {
                   <Row gap={8} wrap>
                     <StatusPill value={market.state} />
                     {market.flag ? (
-                      <span className="pill" style={{ background: "#F3DAD7", color: "var(--danger)" }}>
+                      <span className="pill" style={{ background: "var(--danger-fill)", color: "var(--danger)" }}>
                         {market.flag}
                       </span>
                     ) : null}

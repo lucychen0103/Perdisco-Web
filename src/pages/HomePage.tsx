@@ -6,6 +6,7 @@ import {
   Info,
 } from "lucide-react";
 import { alerts, auditEvents } from "../data";
+import { PREDICTION_MARKETS_ENABLED } from "../flags";
 import { useApp } from "../state";
 import {
   Avatar,
@@ -71,13 +72,15 @@ export function HomePage() {
           hint="Open community cases"
           onClick={() => navigate("community")}
         />
-        <Stat
-          label="Markets due"
-          value={dueMarkets.length}
-          tone={dueMarkets.length ? "warn" : "ok"}
-          hint="Awaiting resolution"
-          onClick={() => navigate("markets")}
-        />
+        {PREDICTION_MARKETS_ENABLED ? (
+          <Stat
+            label="Markets due"
+            value={dueMarkets.length}
+            tone={dueMarkets.length ? "warn" : "ok"}
+            hint="Awaiting resolution"
+            onClick={() => navigate("markets")}
+          />
+        ) : null}
       </Row>
 
       <SectionTitle
@@ -108,7 +111,7 @@ export function HomePage() {
                 justifyContent: "center",
                 background:
                   alert.tone === "danger"
-                    ? "#F3DAD7"
+                    ? "var(--danger-fill)"
                     : alert.tone === "warn"
                       ? "var(--peach)"
                       : "var(--blue)",

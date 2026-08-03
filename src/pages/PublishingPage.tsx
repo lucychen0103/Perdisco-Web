@@ -97,7 +97,7 @@ export function PublishingPage() {
                         className="pill"
                         style={{
                           background:
-                            release.health === "Healthy" ? "var(--lime)" : "#F3DAD7",
+                            release.health === "Healthy" ? "var(--lime)" : "var(--danger-fill)",
                           color:
                             release.health === "Healthy"
                               ? "var(--lime-dark)"

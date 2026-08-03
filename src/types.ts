@@ -100,6 +100,16 @@ export type Blocker = {
   overridable: boolean;
 };
 
+/**
+ * One entry in a statement's ordered elaboration document. Statements are the
+ * deepest level of the hierarchy, so an elaboration holds only prose and
+ * activities — no nested statements. Optional because drafts persisted before
+ * this field are derived from context + linked activities on first read.
+ */
+export type ElaborationBlock =
+  | { kind: "text"; id: string; text: string }
+  | { kind: "activity"; id: string; activityId: string };
+
 export type AdminStatement = {
   id: string;
   projectId: string;
@@ -118,6 +128,7 @@ export type AdminStatement = {
   aiModelRun?: string;
   elaborationState: "Complete" | "Draft" | "Empty";
   discussionEnabled: boolean;
+  elaborationBlocks?: ElaborationBlock[];
 };
 
 /**

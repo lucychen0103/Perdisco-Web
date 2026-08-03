@@ -177,7 +177,7 @@ export function ProjectsPage() {
                   {project.blockers.length > 0 ? (
                     <span
                       className="pill"
-                      style={{ background: "#F3DAD7", color: "var(--danger)" }}
+                      style={{ background: "var(--danger-fill)", color: "var(--danger)" }}
                     >
                       {project.blockers.length} blocker{project.blockers.length > 1 ? "s" : ""}
                     </span>

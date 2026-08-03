@@ -24,9 +24,11 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { PublishingPage } from "./pages/PublishingPage";
 import { QuestionsPage } from "./pages/QuestionsPage";
 import { ReviewPage } from "./pages/ReviewPage";
+import { WorkspaceGate } from "./pages/WorkspaceGate";
+import { PREDICTION_MARKETS_ENABLED } from "./flags";
 import { useApp } from "./state";
 import type { SourceFormat, SourceProject } from "./types";
-import { Avatar, Eyebrow, FieldLabel, PrimaryButton, StatusPill, inputStyle } from "./ui";
+import { Avatar, EmptyState, Eyebrow, FieldLabel, PrimaryButton, StatusPill, inputStyle } from "./ui";
 
 const NAV = [
   { key: "home", label: "Home", icon: House, hint: "My work and alerts" },
@@ -38,14 +40,18 @@ const NAV = [
   { key: "markets", label: "Markets", icon: TrendingUp, hint: "Prediction operations" },
   { key: "assets", label: "Assets", icon: Archive, hint: "Media and rights" },
   { key: "admin", label: "Administration", icon: ShieldCheck, hint: "People and policy" },
-];
+].filter((item) => item.key !== "markets" || PREDICTION_MARKETS_ENABLED);
 
 export function App() {
-  const { route, navigate, toasts } = useApp();
+  const { route, navigate, toasts, workspaceStatus } = useApp();
   const [searchOpen, setSearchOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
   const section = route.split("/")[0];
+
+  // Database-backed drafts: nothing to show until the workspace is hydrated.
+  // 'local' (Supabase unconfigured) keeps the old in-memory behavior.
+  const gated = workspaceStatus !== "local" && workspaceStatus !== "ready";
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -61,6 +67,8 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  if (gated) return <WorkspaceGate />;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
@@ -95,9 +103,9 @@ export function App() {
             display: "flex",
             alignItems: "center",
             gap: 9,
-            background: "var(--forest)",
-            color: "var(--white)",
-            borderRadius: 15,
+            background: "var(--magenta)",
+            color: "var(--magenta-on)",
+            borderRadius: 14,
             padding: "12px 14px",
             fontSize: 12,
             fontWeight: 600,
@@ -122,10 +130,10 @@ export function App() {
                 gap: 11,
                 padding: "10px 12px",
                 borderRadius: 14,
-                background: active ? "var(--paper)" : "transparent",
-                border: active ? "1px solid var(--line)" : "1px solid transparent",
-                color: active ? "var(--forest)" : "var(--muted)",
-                fontWeight: active ? 700 : 500,
+                background: active ? "var(--panel-active)" : "transparent",
+                border: "1px solid transparent",
+                color: active ? "var(--ink)" : "var(--label)",
+                fontWeight: active ? 600 : 500,
                 fontSize: 13,
                 textAlign: "left",
               }}
@@ -155,7 +163,9 @@ export function App() {
             position: "sticky",
             top: 0,
             zIndex: 30,
-            background: "var(--background)",
+            background: "rgba(6, 66, 77, 0.88)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
             borderBottom: "1px solid var(--line)",
             padding: "12px 28px",
             display: "flex",
@@ -181,7 +191,9 @@ export function App() {
             }}
           >
             <Search size={15} />
-            Search projects, statements, people, markets…
+            {PREDICTION_MARKETS_ENABLED
+              ? "Search projects, statements, people, markets…"
+              : "Search projects, statements, people…"}
             <span
               style={{
                 marginLeft: "auto",
@@ -212,7 +224,15 @@ export function App() {
           {section === "questions" && <QuestionsPage />}
           {section === "publishing" && <PublishingPage />}
           {section === "community" && <CommunityPage />}
-          {section === "markets" && <MarketsPage />}
+          {section === "markets" &&
+            (PREDICTION_MARKETS_ENABLED ? (
+              <MarketsPage />
+            ) : (
+              <EmptyState
+                title="Markets are disabled"
+                detail="Prediction markets are cut from consumer v1, so market operations are turned off for now."
+              />
+            ))}
           {section === "assets" && <AssetsPage />}
           {section === "admin" && <AdminPage />}
         </main>
@@ -237,13 +257,14 @@ export function App() {
           <div
             key={toast.id}
             style={{
-              background: "var(--forest-dark)",
-              color: "var(--white)",
+              background: "var(--ground-deep)",
+              color: "var(--ink)",
+              border: "1px solid var(--hairline)",
               borderRadius: 14,
               padding: "11px 18px",
               fontSize: 12,
-              fontWeight: 700,
-              boxShadow: "var(--shadow)",
+              fontWeight: 600,
+              boxShadow: "0 12px 30px rgba(2, 20, 25, 0.45)",
             }}
           >
             {toast.message}
@@ -270,7 +291,9 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
         (statement) => match(statement.text) || match(statement.topic),
       ),
       people: people.filter((person) => match(person.name) || match(person.roles.join(" "))),
-      markets: markets.filter((market) => match(market.question)),
+      markets: PREDICTION_MARKETS_ENABLED
+        ? markets.filter((market) => match(market.question))
+        : [],
     };
   }, [query, projects, statements, markets]);
 
@@ -285,7 +308,7 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(23,33,28,0.32)",
+        background: "rgba(2, 20, 25, 0.6)",
         zIndex: 80,
         display: "flex",
         justifyContent: "center",
@@ -302,7 +325,8 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
           borderRadius: 22,
           padding: 18,
           alignSelf: "flex-start",
-          boxShadow: "var(--shadow)",
+          background: "var(--paper)",
+          boxShadow: "0 20px 50px rgba(2, 20, 25, 0.5)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -475,7 +499,7 @@ function CreateProjectModal({ onClose }: { onClose: () => void }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(23,33,28,0.32)",
+        background: "rgba(2, 20, 25, 0.6)",
         zIndex: 80,
         display: "flex",
         alignItems: "center",
@@ -485,7 +509,13 @@ function CreateProjectModal({ onClose }: { onClose: () => void }) {
       <div
         onClick={(event) => event.stopPropagation()}
         className="card"
-        style={{ width: 520, borderRadius: 24, padding: 24, boxShadow: "var(--shadow)" }}
+        style={{
+          width: 520,
+          borderRadius: 24,
+          padding: 24,
+          background: "var(--paper)",
+          boxShadow: "0 20px 50px rgba(2, 20, 25, 0.5)",
+        }}
       >
         <Eyebrow style={{ fontSize: 9 }}>New source project</Eyebrow>
         <div className="display" style={{ fontSize: 24, marginTop: 4 }}>
@@ -506,8 +536,8 @@ function CreateProjectModal({ onClose }: { onClose: () => void }) {
               style={{
                 padding: "8px 13px",
                 fontSize: 10,
-                background: format === item ? "var(--forest)" : "var(--paper-muted)",
-                color: format === item ? "var(--white)" : "var(--muted)",
+                background: format === item ? "var(--champagne)" : "var(--panel-strong)",
+                color: format === item ? "var(--ground-deep)" : "var(--muted)",
               }}
             >
               {item}
@@ -607,7 +637,7 @@ function useAddProject() {
         .join("")
         .slice(0, 2)
         .toUpperCase() || "??",
-      gradient: ["#C8D98C", "#315A47"],
+      gradient: ["#E3C08D", "#9C1E5D"],
       language: "English",
       state: "Draft",
       owner: "Lucy Chen",

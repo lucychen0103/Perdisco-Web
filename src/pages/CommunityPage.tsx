@@ -147,7 +147,7 @@ export function CommunityPage() {
                       fontSize: 10,
                       background:
                         action === "Remove" || action === "Escalate"
-                          ? "#F3DAD7"
+                          ? "var(--danger-fill)"
                           : "var(--paper)",
                       color:
                         action === "Remove" || action === "Escalate"

@@ -1,17 +1,14 @@
 import {
-  ArrowLeft,
+  ArrowUpRight,
   Bookmark,
-  BookmarkPlus,
-  BookOpenText,
-  ChevronRight,
-  ExternalLink,
+  ChevronLeft,
+  MoreHorizontal,
   Play,
-  Plus,
-  Sparkles,
-  X,
 } from "lucide-react";
+import { elaborationBlocksOf } from "../lib/elaboration";
 import type {
   ActivityDraft,
+  ActivityMode,
   AdminMarket,
   AdminStatement,
   SourceProject,
@@ -20,12 +17,20 @@ import type {
 import { typeVisuals } from "../ui";
 
 /**
- * Pixel-faithful recreation of the consumer app's summary and elaboration
- * screens (app/summary/[id].tsx and app/statement/[id].tsx) so editors
- * compose against the exact experience users receive.
+ * Pixel-faithful recreation of the consumer app's Nocturne summary and
+ * elaboration screens (app/summary/[id].tsx and app/statement/[id].tsx) so
+ * editors compose against the exact experience users receive.
  */
 
 const serif = "var(--font-display)";
+
+const modeColors: Record<ActivityMode, string> = {
+  Flashcard: "var(--champagne)",
+  "Applied quiz": "var(--aqua)",
+  Matching: "var(--lilac)",
+  Poll: "var(--aqua-light)",
+  Prediction: "var(--rose)",
+};
 
 export function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
@@ -34,11 +39,12 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
         width: 375,
         height: 720,
         borderRadius: 44,
-        border: "10px solid var(--ink)",
-        background: "var(--background)",
+        border: "10px solid var(--ground-deep)",
+        background:
+          "radial-gradient(110% 62% at 8% 0%, rgba(127,211,217,0.2), transparent 60%), radial-gradient(90% 55% at 100% 100%, rgba(156,30,93,0.36), transparent 62%), var(--ground)",
         overflow: "hidden",
         position: "relative",
-        boxShadow: "var(--shadow)",
+        boxShadow: "0 20px 50px rgba(2, 20, 25, 0.5)",
         flexShrink: 0,
       }}
     >
@@ -51,7 +57,7 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
           width: 110,
           height: 22,
           borderRadius: 12,
-          background: "var(--ink)",
+          background: "var(--ground-deep)",
           zIndex: 5,
         }}
       />
@@ -80,134 +86,87 @@ export function SummaryPreview({
   const activityFor = (block: Extract<SummaryBlock, { kind: "activity" }>) =>
     activities.find((activity) => activity.id === block.activityId);
   const learningCount = statements.filter((statement) => statement.learningEligible).length;
+
+  const statementBlocks = project.blocks.filter(
+    (block) => block.kind === "statement",
+  );
+  const lastStatementBlockId = statementBlocks[statementBlocks.length - 1]?.id;
+
   return (
     <div>
       <div
         style={{
-          height: 50,
-          padding: "0 14px",
+          minHeight: 50,
+          padding: "6px 16px 0",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          borderBottom: "1px solid var(--line)",
         }}
       >
-        <PreviewCircle>
-          <ArrowLeft size={16} color="var(--ink)" />
-        </PreviewCircle>
-        <span
-          style={{
-            color: "var(--forest)",
-            fontSize: 9,
-            fontWeight: 900,
-            letterSpacing: 1.1,
-          }}
-        >
-          INTERACTIVE SUMMARY
+        <ChevronLeft size={18} color="var(--ink-soft)" strokeWidth={1.8} />
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 16 }}>
+          <Bookmark size={16} color="var(--ink-soft)" strokeWidth={1.8} />
+          <ArrowUpRight size={16} color="var(--champagne)" strokeWidth={1.8} />
         </span>
-        <PreviewCircle>
-          <Bookmark size={16} color="var(--forest)" />
-        </PreviewCircle>
       </div>
 
-      <div style={{ padding: "0 15px 50px" }}>
+      <div style={{ padding: "6px 17px 50px" }}>
         <div
           style={{
-            borderRadius: 24,
-            padding: 17,
-            minHeight: 210,
-            marginTop: 14,
+            height: 92,
+            borderRadius: 18,
+            padding: 12,
             display: "flex",
-            flexDirection: "column",
+            alignItems: "flex-end",
             justifyContent: "flex-end",
             background: `linear-gradient(135deg, ${project.gradient[0]}, ${project.gradient[1]})`,
           }}
         >
-          <div
+          <span
             style={{
-              color: "rgba(255,255,255,0.72)",
-              fontSize: 8,
-              fontWeight: 900,
+              color: "rgba(255,255,255,0.85)",
+              fontSize: 10,
+              fontWeight: 700,
               letterSpacing: 1.2,
             }}
           >
-            {project.format.toUpperCase()}S · {project.duration}
-          </div>
-          <div
-            style={{
-              color: "var(--white)",
-              fontFamily: serif,
-              fontSize: 24,
-              lineHeight: "29px",
-              fontWeight: 700,
-              marginTop: 7,
-            }}
-          >
-            {project.title || "Untitled source"}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 14 }}>
-            <span
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 12,
-                background: "rgba(255,255,255,0.86)",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--forest-dark)",
-                fontSize: 9,
-                fontWeight: 900,
-              }}
-            >
-              {project.initials}
-            </span>
-            <div>
-              <div style={{ color: "var(--white)", fontSize: 10.5, fontWeight: 900 }}>
-                {project.creator}
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.66)", fontSize: 8, marginTop: 1 }}>
-                {project.creatorRole}
-              </div>
-            </div>
-          </div>
+            {project.initials}
+          </span>
         </div>
 
+        <div style={{ marginTop: 14 }}>
+          <MicroLabel>
+            {project.format.toUpperCase()} · {project.duration.toUpperCase()} ·{" "}
+            {project.category.toUpperCase()}
+          </MicroLabel>
+        </div>
         <div
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 10,
-            background: "var(--paper)",
-            border: "1px solid var(--line)",
-            borderRadius: 14,
-            padding: 11,
-            marginTop: 11,
+            color: "var(--ink)",
+            fontFamily: serif,
+            fontSize: 26,
+            lineHeight: 1.14,
+            letterSpacing: "-0.01em",
+            marginTop: 8,
           }}
         >
-          {(Object.keys(typeVisuals) as (keyof typeof typeVisuals)[]).map((type) => (
-            <span
-              key={type}
-              style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-            >
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: 4,
-                  background: typeVisuals[type].strong,
-                }}
-              />
-              <span
-                style={{ color: "var(--muted)", fontSize: 8.5, textTransform: "capitalize" }}
-              >
-                {type === "MENTAL MODEL" ? "Model" : type.toLowerCase()}
-              </span>
-            </span>
-          ))}
+          {project.title || "Untitled source"}
+        </div>
+        <div
+          style={{
+            color: "var(--muted)",
+            fontFamily: serif,
+            fontSize: 14,
+            marginTop: 6,
+          }}
+        >
+          {project.creator}
+          {project.creatorRole && project.creatorRole !== "—"
+            ? ` · ${project.creatorRole}`
+            : ""}
         </div>
 
-        <div style={{ paddingTop: 12 }}>
+        <div style={{ paddingTop: 8 }}>
           {project.blocks.map((block) => {
             if (block.kind === "text") {
               return <Prose key={block.id}>{block.text}</Prose>;
@@ -222,187 +181,110 @@ export function SummaryPreview({
                   key={block.id}
                   onClick={() => onSelect?.(block.id)}
                   style={{
-                    display: "block",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 10,
                     width: "100%",
                     textAlign: "left",
-                    borderRadius: 19,
-                    padding: 15,
-                    margin: "9px 0",
-                    minHeight: 116,
-                    background: visual.background,
-                    border: focused
-                      ? `2px solid ${visual.strong}`
-                      : "1px solid rgba(23,33,28,0.08)",
+                    padding: "13px 4px",
+                    borderTop: "1px solid var(--hairline)",
+                    borderBottom:
+                      block.id === lastStatementBlockId
+                        ? "1px solid var(--hairline)"
+                        : "none",
+                    background: focused ? "rgba(227,192,141,0.1)" : "transparent",
+                    borderRadius: focused ? 10 : 0,
                     cursor: onSelect ? "pointer" : "default",
                   }}
                 >
-                  <div
+                  <span
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      marginBottom: 10,
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      marginTop: 6,
+                      background: visual.strong,
+                      flexShrink: 0,
                     }}
-                  >
-                    <span
-                      style={{
-                        color: visual.strong,
-                        fontSize: 8,
-                        fontWeight: 900,
-                        letterSpacing: 1,
-                      }}
-                    >
-                      {statement.type} · {statement.locator} ↗
-                    </span>
-                    <span
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 12,
-                        background: visual.strong,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <BookmarkPlus size={12} color="var(--white)" />
-                    </span>
-                  </div>
-                  <div
+                  />
+                  <span
                     style={{
-                      color: "var(--ink)",
+                      color: focused ? "var(--champagne-bright)" : "var(--ink)",
                       fontFamily: serif,
-                      fontSize: 19,
-                      lineHeight: "25px",
-                      fontWeight: 700,
+                      fontSize: 15,
+                      lineHeight: 1.4,
                     }}
                   >
                     {statement.text}
-                  </div>
+                  </span>
                 </button>
               );
             }
             const activity = activityFor(block);
             if (!activity) return null;
-            const focused = focusedId === block.id;
             return (
-              <button
+              <ActivityCard
                 key={block.id}
-                onClick={() => onSelect?.(block.id)}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  borderRadius: 19,
-                  padding: 14,
-                  margin: "9px 0",
-                  background: "var(--paper)",
-                  border: focused ? "2px solid var(--forest)" : "1px solid var(--line)",
-                  cursor: onSelect ? "pointer" : "default",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "var(--forest)",
-                      fontSize: 8,
-                      fontWeight: 900,
-                      letterSpacing: 1,
-                    }}
-                  >
-                    {activity.mode.toUpperCase()} · TRY IT
-                  </span>
-                  {activity.reward ? (
-                    <span
-                      style={{
-                        background: "var(--token)",
-                        color: "var(--forest-dark)",
-                        borderRadius: 999,
-                        padding: "2px 7px",
-                        fontSize: 8,
-                        fontWeight: 900,
-                      }}
-                    >
-                      +{activity.reward}
-                    </span>
-                  ) : null}
-                </div>
-                <div
-                  style={{
-                    fontFamily: serif,
-                    fontSize: 15.5,
-                    lineHeight: "21px",
-                    fontWeight: 700,
-                    color: "var(--ink)",
-                    marginTop: 8,
-                  }}
-                >
-                  {activity.prompt}
-                </div>
-                <ActivityCardBody
-                  activity={activity}
-                  market={markets.find((market) => market.id === activity.marketId)}
-                />
-              </button>
+                activity={activity}
+                market={markets.find((market) => market.id === activity.marketId)}
+                focused={focusedId === block.id}
+                onClick={onSelect ? () => onSelect(block.id) : undefined}
+              />
             );
           })}
         </div>
 
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            background: "var(--paper)",
-            border: "1px solid var(--line)",
-            borderRadius: 19,
-            padding: 12,
-            marginTop: 16,
+            marginTop: 14,
+            borderRadius: 12,
+            background: "var(--panel)",
+            padding: "12px 14px",
           }}
         >
-          <span
+          <div style={{ color: "var(--ink-soft)", fontFamily: serif, fontSize: 13 }}>
+            Add this summary to your learning stack
+          </div>
+          <div
             style={{
-              width: 38,
-              height: 38,
-              borderRadius: 13,
-              background: "var(--lime)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
+              color: "var(--label)",
+              fontSize: 8,
+              letterSpacing: 1.4,
+              marginTop: 4,
             }}
           >
-            <Sparkles size={16} color="var(--forest-dark)" />
-          </span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 900 }}>
-              Add this summary to your learning stack
-            </div>
-            <div style={{ fontSize: 8.5, color: "var(--muted)", marginTop: 2 }}>
-              Preview {learningCount} eligible ideas before adding
-            </div>
+            {learningCount} ELIGIBLE IDEAS
           </div>
-          <ChevronRight size={16} color="var(--forest)" />
         </div>
 
         <div
           style={{
             marginTop: 14,
-            padding: "10px 4px 0",
-            borderTop: "1px solid var(--line)",
-            color: "var(--subtle)",
-            fontSize: 9,
-            fontWeight: 800,
-            letterSpacing: 0.8,
+            minHeight: 46,
+            borderRadius: 12,
+            background: "var(--magenta)",
+            color: "var(--magenta-on)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          {project.medium === "audio" || project.medium === "video"
+            ? "Listen from 00:00"
+            : "Open the source"}
+        </div>
+
+        <div
+          style={{
+            marginTop: 14,
+            padding: "10px 2px 0",
+            borderTop: "1px solid var(--hairline)",
+            color: "var(--label)",
+            fontSize: 8,
+            fontWeight: 500,
+            letterSpacing: 1.4,
           }}
         >
           SOURCE DISCUSSION · {project.blocks.length > 0 ? "OPEN" : "NOT CONFIGURED"}
@@ -415,239 +297,328 @@ export function SummaryPreview({
 export function ElaborationPreview({
   project,
   statement,
+  activities = [],
+  markets = [],
 }: {
   project: SourceProject;
   statement: AdminStatement;
+  activities?: ActivityDraft[];
+  markets?: AdminMarket[];
 }) {
   const visual = typeVisuals[statement.type];
+  const hasSupporting = Boolean(statement.supportingSource?.trim());
+  const blocks = elaborationBlocksOf(statement, activities, project);
+  const hasProse = blocks.some((block) => block.kind === "text" && block.text.trim());
   return (
     <div>
       <div
         style={{
-          minHeight: 52,
+          minHeight: 50,
+          padding: "6px 16px 0",
           display: "flex",
           alignItems: "center",
-          gap: 7,
-          padding: "0 13px",
-          borderBottom: "1px solid var(--line)",
+          justifyContent: "space-between",
         }}
       >
-        <span
-          className="pill"
-          style={{ background: visual.strong, color: "var(--white)" }}
-        >
-          {statement.type}
-        </span>
-        <span
-          style={{
-            flex: 1,
-            height: 32,
-            borderRadius: 12,
-            background: "var(--paper)",
-            border: "1px solid var(--line)",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            color: "var(--forest)",
-            fontSize: 9.5,
-            fontWeight: 900,
-          }}
-        >
-          <BookOpenText size={13} />
-          View full summary
-        </span>
-        <PreviewCircle>
-          <X size={15} color="var(--ink)" />
-        </PreviewCircle>
+        <ChevronLeft size={18} color="var(--ink-soft)" strokeWidth={1.8} />
+        <MoreHorizontal size={18} color="var(--ink-soft)" strokeWidth={1.8} />
       </div>
 
-      <div style={{ padding: "16px 15px 40px" }}>
+      <div style={{ padding: "8px 17px 40px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              background: visual.strong,
+              flexShrink: 0,
+            }}
+          />
+          <span
+            style={{
+              color: visual.strong,
+              fontSize: 9,
+              fontWeight: 500,
+              letterSpacing: 2,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {statement.type}
+            {hasSupporting ? ` · ${statement.supportingSource.toUpperCase()}` : ""}
+          </span>
+        </div>
+
         <div
           style={{
             fontFamily: serif,
-            fontSize: 24,
-            lineHeight: "31px",
-            fontWeight: 700,
+            fontSize: 23,
+            lineHeight: 1.26,
+            letterSpacing: "-0.01em",
             color: "var(--ink)",
+            marginTop: 14,
           }}
         >
           {statement.text}
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 15 }}>
+        {!hasProse ? (
           <div
             style={{
-              flex: 1,
-              minHeight: 56,
-              borderRadius: 16,
-              padding: 10,
-              background: "var(--forest)",
-              display: "flex",
-              alignItems: "center",
-              gap: 9,
+              fontFamily: serif,
+              fontSize: 15,
+              lineHeight: 1.7,
+              color: "var(--muted-dim)",
+              marginTop: 14,
             }}
           >
-            <span
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 10,
-                background: "var(--lime)",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <Plus size={14} color="var(--forest-dark)" />
-            </span>
-            <div>
-              <div style={{ color: "var(--white)", fontSize: 10, fontWeight: 900 }}>
-                Add to learning stack
+            No elaboration yet — this statement cannot publish as tappable.
+          </div>
+        ) : null}
+        {blocks.map((block) => {
+          if (block.kind === "text") {
+            if (!block.text.trim()) return null;
+            return (
+              <div
+                key={block.id}
+                style={{
+                  fontFamily: serif,
+                  fontSize: 15,
+                  lineHeight: 1.7,
+                  color: "var(--muted)",
+                  marginTop: 14,
+                }}
+              >
+                {block.text}
               </div>
-              <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 8, marginTop: 2 }}>
-                Deliberately return to this idea later
-              </div>
-            </div>
-          </div>
-          <div
-            style={{
-              width: 50,
-              borderRadius: 16,
-              background: "var(--paper)",
-              border: "1px solid var(--line)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Bookmark size={17} color={visual.strong} />
-          </div>
-        </div>
-
-        <PreviewSectionLabel>WHY THIS MATTERS</PreviewSectionLabel>
-        <div
-          style={{
-            fontFamily: serif,
-            fontSize: 16,
-            lineHeight: "25px",
-            color: "var(--ink)",
-          }}
-        >
-          {statement.context || "No elaboration yet — this statement cannot publish as tappable."}
-        </div>
+            );
+          }
+          const activity = activities.find((item) => item.id === block.activityId);
+          if (!activity) return null;
+          return (
+            <ActivityCard
+              key={block.id}
+              activity={activity}
+              market={markets.find((market) => market.id === activity.marketId)}
+            />
+          );
+        })}
 
         <div
           style={{
-            marginTop: 15,
-            borderRadius: 17,
-            border: "1px solid var(--line)",
-            background: "var(--paper)",
-            padding: 12,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <span
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 17,
-              background: "var(--forest)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <Play size={14} color="var(--white)" fill="var(--white)" />
-          </span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, fontWeight: 900 }}>
-              {project.medium === "audio"
-                ? `Listen from ${statement.locator}`
-                : project.medium === "video"
-                  ? `Watch from ${statement.locator}`
-                  : `Open at ${statement.locator}`}
-            </div>
-            <div style={{ fontSize: 8.5, color: "var(--muted)", marginTop: 2 }}>
-              “{statement.sourceMoment}”
-            </div>
-          </div>
-        </div>
-
-        <PreviewSectionLabel>SOURCE & EVIDENCE</PreviewSectionLabel>
-        <PreviewSourceLink
-          index="01"
-          role="PRIMARY SOURCE"
-          title={project.title}
-          meta={`${project.publisher} · ${statement.locator}`}
-          tint={visual.background}
-          tintStrong={visual.strong}
-        />
-        <PreviewSourceLink
-          index="02"
-          role="SUPPORTING SOURCE"
-          title={statement.supportingSource}
-          meta="Editor verified"
-          tint="var(--paper-muted)"
-          tintStrong="var(--forest)"
-        />
-
-        <div
-          style={{
-            borderRadius: 20,
-            padding: 15,
-            marginTop: 17,
-            background: visual.background,
+            marginTop: 16,
+            borderRadius: 18,
+            padding: 18,
+            background: "var(--quote-fill)",
+            border: "1px solid var(--quote-border)",
           }}
         >
           <div
             style={{
-              color: visual.strong,
-              fontSize: 8,
-              fontWeight: 900,
-              letterSpacing: 1,
+              color: "var(--aqua-light)",
+              fontSize: 9,
+              fontWeight: 500,
+              letterSpacing: 2,
             }}
           >
-            QUICK POLL · OPTIONAL
+            IN THE SOURCE{statement.locator ? ` · ${statement.locator.toUpperCase()}` : ""}
           </div>
           <div
             style={{
               fontFamily: serif,
               fontSize: 17,
-              lineHeight: "23px",
-              fontWeight: 700,
-              marginTop: 8,
+              lineHeight: 1.48,
+              color: "var(--ink)",
+              marginTop: 10,
             }}
           >
-            Does this change how you would evaluate the next claim you encounter?
+            “{statement.sourceMoment}”
           </div>
-          <div style={{ display: "flex", gap: 7, marginTop: 12 }}>
-            {["Yes", "Not yet"].map((label) => (
+          {project.medium === "audio" || project.medium === "video" ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginTop: 14,
+              }}
+            >
               <span
-                key={label}
                 style={{
-                  flex: 1,
-                  height: 38,
+                  width: 36,
+                  height: 36,
                   borderRadius: 12,
-                  background: "rgba(255,255,255,0.72)",
+                  background: "var(--magenta)",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 10.5,
-                  fontWeight: 900,
+                  flexShrink: 0,
                 }}
               >
-                {label}
+                <Play size={13} color="var(--magenta-on)" fill="var(--magenta-on)" />
               </span>
-            ))}
+              <span style={{ flex: 1 }}>
+                <span
+                  style={{
+                    display: "block",
+                    height: 3,
+                    borderRadius: 2,
+                    background: "rgba(234,246,245,0.18)",
+                  }}
+                />
+              </span>
+              <span style={{ color: "var(--label)", fontSize: 8, letterSpacing: 1 }}>
+                {statement.locator || "0:00"}
+              </span>
+            </div>
+          ) : null}
+        </div>
+
+        {hasSupporting ? (
+          <div
+            style={{
+              marginTop: 14,
+              minHeight: 40,
+              borderRadius: 12,
+              background: "var(--panel)",
+              padding: "11px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
+            <span
+              style={{
+                color: "var(--ink-soft)",
+                fontFamily: serif,
+                fontSize: 13,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {statement.supportingSource}
+            </span>
+            <ArrowUpRight size={13} color="var(--champagne)" strokeWidth={2} />
           </div>
+        ) : null}
+
+        <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+          <span
+            style={{
+              flex: 1,
+              minHeight: 44,
+              borderRadius: 12,
+              border: "1px solid var(--outline)",
+              color: "var(--ink)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Save
+          </span>
+          <span
+            style={{
+              flex: 1.5,
+              minHeight: 44,
+              borderRadius: 12,
+              background: "var(--champagne)",
+              color: "var(--ground-deep)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Add to my stack
+          </span>
         </div>
       </div>
     </div>
+  );
+}
+
+function ActivityCard({
+  activity,
+  market,
+  focused,
+  onClick,
+}: {
+  activity: ActivityDraft;
+  market?: AdminMarket;
+  focused?: boolean;
+  onClick?: () => void;
+}) {
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag
+      onClick={onClick}
+      style={{
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        borderRadius: 16,
+        padding: 14,
+        margin: "10px 0",
+        background: "var(--panel)",
+        border: focused ? "1px solid var(--champagne)" : "1px solid var(--hairline)",
+        cursor: onClick ? "pointer" : "default",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            color: modeColors[activity.mode],
+            fontSize: 9,
+            fontWeight: 500,
+            letterSpacing: 2,
+          }}
+        >
+          {activity.mode.toUpperCase()}
+        </span>
+        {activity.reward ? (
+          <span
+            style={{
+              background: "rgba(227,192,141,0.14)",
+              color: "var(--champagne)",
+              borderRadius: 10,
+              padding: "3px 8px",
+              fontSize: 8,
+              fontWeight: 600,
+              letterSpacing: 1.2,
+            }}
+          >
+            +{activity.reward} POINTS
+          </span>
+        ) : null}
+      </div>
+      <div
+        style={{
+          fontFamily: serif,
+          fontSize: 15,
+          lineHeight: 1.3,
+          color: "var(--ink)",
+          marginTop: 9,
+        }}
+      >
+        {activity.prompt}
+      </div>
+      <ActivityCardBody activity={activity} market={market} />
+    </Tag>
   );
 }
 
@@ -668,18 +639,27 @@ function ActivityCardBody({
               key={index}
               style={{
                 borderRadius: 10,
-                border: "1px solid var(--line)",
-                background: "var(--paper-muted)",
+                border: "1px solid rgba(234,246,245,0.16)",
                 padding: "7px 10px",
                 fontSize: 9.5,
-                fontWeight: 700,
-                color: "var(--ink)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                color: "var(--ink-soft)",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 8,
               }}
             >
-              {option}
+              <span style={{ color: "var(--label)", fontSize: 8, lineHeight: "16px" }}>
+                {String.fromCharCode(65 + index)}
+              </span>
+              <span
+                style={{
+                  fontFamily: serif,
+                  fontSize: 11,
+                  lineHeight: "16px",
+                }}
+              >
+                {option}
+              </span>
             </div>
           ))}
         </div>
@@ -697,8 +677,7 @@ function ActivityCardBody({
             style={{
               fontFamily: serif,
               fontSize: 18,
-              fontWeight: 700,
-              color: "var(--forest)",
+              color: "var(--champagne)",
             }}
           >
             {market.communityProbability > 0 ? `${market.communityProbability}%` : "—"}
@@ -710,45 +689,37 @@ function ActivityCardBody({
       ) : null}
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          marginTop: 9,
-          color: "var(--forest)",
-          fontSize: 9,
-          fontWeight: 900,
+          marginTop: 10,
+          color: "var(--label)",
+          fontSize: 8,
+          fontWeight: 500,
+          letterSpacing: 1.4,
         }}
       >
         {activity.mode === "Flashcard"
-          ? "Tap to reveal"
+          ? "TAP TO REVEAL"
           : activity.mode === "Matching"
-            ? `Match ${activity.matchingRows?.length ?? 0} pairs`
+            ? `MATCH ${activity.matchingRows?.length ?? 0} PAIRS`
             : activity.mode === "Prediction"
-              ? "Make your call"
-              : "Start"}{" "}
-        <ChevronRight size={11} />
+              ? "MAKE YOUR CALL"
+              : "START"}
       </div>
     </>
   );
 }
 
-function PreviewCircle({ children }: { children: React.ReactNode }) {
+function MicroLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span
+    <div
       style={{
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        background: "var(--paper)",
-        border: "1px solid var(--line)",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
+        color: "var(--label)",
+        fontSize: 9,
+        fontWeight: 500,
+        letterSpacing: 2,
       }}
     >
       {children}
-    </span>
+    </div>
   );
 }
 
@@ -757,114 +728,13 @@ function Prose({ children }: { children: React.ReactNode }) {
     <div
       style={{
         fontFamily: serif,
-        fontSize: 15.5,
-        lineHeight: "25px",
-        color: "var(--ink)",
-        margin: "8px 0",
+        fontSize: 14.5,
+        lineHeight: 1.65,
+        color: "var(--muted)",
+        margin: "10px 0",
       }}
     >
       {children}
-    </div>
-  );
-}
-
-function PreviewSectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 9,
-        marginTop: 24,
-        marginBottom: 10,
-      }}
-    >
-      <span
-        style={{
-          color: "var(--forest)",
-          fontSize: 8,
-          fontWeight: 900,
-          letterSpacing: 1.2,
-        }}
-      >
-        {children}
-      </span>
-      <span style={{ flex: 1, height: 1, background: "var(--line)" }} />
-    </div>
-  );
-}
-
-function PreviewSourceLink({
-  index,
-  role,
-  title,
-  meta,
-  tint,
-  tintStrong,
-}: {
-  index: string;
-  role: string;
-  title: string;
-  meta: string;
-  tint: string;
-  tintStrong: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        background: "var(--paper)",
-        border: "1px solid var(--line)",
-        borderRadius: 15,
-        padding: 11,
-        marginBottom: 7,
-      }}
-    >
-      <span
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: 10,
-          background: tint,
-          color: tintStrong,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 8,
-          fontWeight: 900,
-          flexShrink: 0,
-        }}
-      >
-        {index}
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            color: "var(--forest)",
-            fontSize: 7,
-            fontWeight: 900,
-            letterSpacing: 0.7,
-          }}
-        >
-          {role}
-        </div>
-        <div
-          style={{
-            fontSize: 10.5,
-            fontWeight: 800,
-            marginTop: 2,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {title}
-        </div>
-        <div style={{ fontSize: 8, color: "var(--muted)", marginTop: 2 }}>{meta}</div>
-      </div>
-      <ExternalLink size={14} color="var(--forest)" />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { elaborationActivityIds, elaborationBlocksOf } from "./elaboration";
 import { supabase } from "./supabase";
 import type {
   ActivityDraft,
@@ -14,18 +15,20 @@ const TYPE_CODES: Record<StatementType, string> = {
   "MENTAL MODEL": "mental_model",
 };
 
-// Modes the consumer contract accepts. Poll has no consumer rendering and
-// Prediction is cut from consumer v1, so both publish as nothing.
+// Modes the consumer contract accepts. Prediction is cut from consumer v1, so
+// it publishes as nothing.
 const ACTIVITY_MODE_CODES: Partial<Record<ActivityMode, string>> = {
   Flashcard: "flashcard",
   "Applied quiz": "quiz",
   Matching: "matching",
+  Poll: "poll",
 };
 
 const ACTIVITY_EYEBROWS: Partial<Record<ActivityMode, string>> = {
   Flashcard: "APPLIED RECALL",
   "Applied quiz": "APPLIED QUIZ",
   Matching: "APPLIED MATCHING",
+  Poll: "QUICK POLL",
 };
 
 export type PublishResult = {
@@ -71,6 +74,26 @@ export function buildPublishPayload(
   const activityById = new Map(
     activities.map((activity) => [activity.id, activity]),
   );
+
+  // Activities living inside statement elaborations publish too, after the
+  // summary-placed ones, in statement order. Placement matters for polls: an
+  // elaboration poll keeps its statement link and renders on that statement's
+  // screen, while a poll placed in the summary document publishes with a null
+  // link and renders on the summary screen.
+  const summaryPlacedIds = new Set(orderedActivityIds);
+  const seenActivityIds = new Set(orderedActivityIds);
+  for (const statementId of orderedStatementIds) {
+    const statement = byId.get(statementId);
+    if (!statement) continue;
+    for (const activityId of elaborationActivityIds(
+      elaborationBlocksOf(statement, activities, project),
+    )) {
+      if (!seenActivityIds.has(activityId)) {
+        seenActivityIds.add(activityId);
+        orderedActivityIds.push(activityId);
+      }
+    }
+  }
 
   return {
     publishedBy,
@@ -118,16 +141,20 @@ export function buildPublishPayload(
     activities: orderedActivityIds.flatMap((id) => {
       const activity = activityById.get(id);
       const mode = activity ? ACTIVITY_MODE_CODES[activity.mode] : undefined;
-      // Unknown drafts and unpublishable modes (Poll, Prediction) are dropped,
+      // Unknown drafts and unpublishable modes (Prediction) are dropped,
       // mirroring how TYPE_CODES gates statement types.
       if (!activity || !mode) return [];
-      const statement = byId.get(activity.statementId);
+      const statementKey =
+        activity.mode === "Poll" && summaryPlacedIds.has(activity.id)
+          ? null
+          : activity.statementId;
+      const statement = statementKey ? byId.get(statementKey) : undefined;
       const eyebrowBase = ACTIVITY_EYEBROWS[activity.mode] ?? "PRACTICE";
       return [
         {
           stableKey: activity.id,
           mode,
-          statementStableKey: activity.statementId,
+          statementStableKey: statementKey,
           eyebrow: statement?.topic
             ? `${eyebrowBase} · ${statement.topic.toUpperCase()}`
             : eyebrowBase,

@@ -15,6 +15,11 @@ import { useMemo, useState } from "react";
 import aiInstructions from "../../docs/ai-import-instructions.md?raw";
 import { aiSuggestions } from "../data";
 import {
+  elaborationActivityIds,
+  elaborationBlocksOf,
+  elaborationText,
+} from "../lib/elaboration";
+import {
   FORMAT_GUIDE,
   SAMPLE_MARKDOWN,
   parseMarkdown,
@@ -28,6 +33,7 @@ import type {
   ActivityDraft,
   ActivityMode,
   AdminStatement,
+  ElaborationBlock,
   RightsStatus,
   SourceProject,
   StatementType,
@@ -52,11 +58,17 @@ import {
 
 const TABS = ["Composer", "Intake & rights", "Processing", "Review gates", "Activities"] as const;
 const STATEMENT_TYPES: StatementType[] = ["FACT", "OPINION", "FORECAST", "MENTAL MODEL"];
-// Poll and Prediction are not offered for new activities: neither publishes to
-// the consumer app (polls have no consumer rendering; predictions are cut from
-// consumer v1). Existing drafts in those modes stay visible with a badge.
-const ACTIVITY_MODES: ActivityMode[] = ["Flashcard", "Applied quiz", "Matching"];
-const UNPUBLISHABLE_ACTIVITY_MODES: ActivityMode[] = ["Poll", "Prediction"];
+// Prediction is not offered for new activities: it is cut from consumer v1 and
+// does not publish. Existing drafts in that mode stay visible with a badge.
+// Polls publish and render inline: in a statement's elaboration they appear on
+// that statement's screen, in the summary document on the summary screen.
+const ACTIVITY_MODES: ActivityMode[] = [
+  "Flashcard",
+  "Applied quiz",
+  "Matching",
+  "Poll",
+];
+const UNPUBLISHABLE_ACTIVITY_MODES: ActivityMode[] = ["Prediction"];
 
 const uid = (prefix: string) =>
   `${prefix}-${Date.now().toString(36)}${Math.floor(Math.random() * 100)}`;
@@ -170,6 +182,15 @@ export function ProjectDetailPage({ id }: { id: string }) {
   const statementOrder = project.blocks
     .filter((block) => block.kind === "statement")
     .map((block) => block.id);
+
+  // Inline activities living in each statement's elaboration document, so the
+  // composer list can show they exist without opening the statement.
+  const elabActivityCounts = new Map(
+    statements.map((statement) => [
+      statement.id,
+      elaborationActivityIds(elaborationBlocksOf(statement, activities, project)).length,
+    ]),
+  );
 
   const openBlock = (blockId: string) => {
     setSelectedBlockId(blockId);
@@ -519,8 +540,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
                 <Eyebrow style={{ fontSize: 9 }}>Summary document</Eyebrow>
                 <div className="display" style={{ fontSize: 20 }}>
                   {project.blocks.length} blocks · {statements.length} statements ·{" "}
-                  {project.blocks.filter((block) => block.kind === "activity").length}{" "}
-                  activities
+                  {activities.length} activities
                 </div>
               </div>
               <PrimaryButton
@@ -557,6 +577,11 @@ export function ProjectDetailPage({ id }: { id: string }) {
                   activity={
                     block.kind === "activity"
                       ? allActivities.find((item) => item.id === block.activityId)
+                      : undefined
+                  }
+                  elabActivityCount={
+                    block.kind === "statement"
+                      ? elabActivityCounts.get(block.statementId)
                       : undefined
                   }
                   selected={selectedBlockId === block.id}
@@ -682,7 +707,12 @@ export function ProjectDetailPage({ id }: { id: string }) {
             </Row>
             <PhoneFrame>
               {previewMode === "elaboration" && selectedStatement ? (
-                <ElaborationPreview project={project} statement={selectedStatement} />
+                <ElaborationPreview
+                  project={project}
+                  statement={selectedStatement}
+                  activities={activities}
+                  markets={markets}
+                />
               ) : (
                 <SummaryPreview
                   project={project}
@@ -851,7 +881,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
               >
                 <span
                   className="pill"
-                  style={{ background: "var(--forest)", color: "var(--white)" }}
+                  style={{ background: "rgba(227,192,141,0.16)", color: "var(--champagne)" }}
                 >
                   {activity.mode}
                 </span>
@@ -951,6 +981,7 @@ export function ProjectDetailPage({ id }: { id: string }) {
 
       {editingBlock?.kind === "statement" ? (
         <StatementModal
+          project={project}
           statement={allStatements.find((item) => item.id === editingBlock.statementId)}
           onChange={(patch) => updateStatement(editingBlock.statementId, patch)}
           onRemove={() => {
@@ -1039,6 +1070,7 @@ function BlockRow({
   statementNumber,
   statement,
   activity,
+  elabActivityCount,
   selected,
   onOpen,
   onMove,
@@ -1050,6 +1082,7 @@ function BlockRow({
   statementNumber?: number;
   statement?: AdminStatement;
   activity?: ActivityDraft;
+  elabActivityCount?: number;
   selected: boolean;
   onOpen: () => void;
   onMove: (direction: -1 | 1) => void;
@@ -1159,6 +1192,14 @@ function BlockRow({
                             : "Missing"
                       }
                     />
+                    {elabActivityCount ? (
+                      <span
+                        className="pill"
+                        style={{ background: "var(--paper-muted)", color: "var(--muted)" }}
+                      >
+                        <Puzzle size={9} /> {elabActivityCount} inline
+                      </span>
+                    ) : null}
                     {statement.aiSuggested ? (
                       <span
                         className="pill"
@@ -1353,18 +1394,82 @@ function TextBlockModal({
 }
 
 function StatementModal({
+  project,
   statement,
   onChange,
   onRemove,
   onClose,
 }: {
+  project: SourceProject;
   statement?: AdminStatement;
   onChange: (patch: Partial<AdminStatement>) => void;
   onRemove: () => void;
   onClose: () => void;
 }) {
+  const { activities, addActivity, updateActivity, removeActivity, notify } = useApp();
+  const [editingActivityId, setEditingActivityId] = useState<string | undefined>();
   if (!statement) return null;
+
+  const projectActivities = activities.filter(
+    (activity) => activity.projectId === statement.projectId,
+  );
+  const blocks = elaborationBlocksOf(statement, projectActivities, project);
+  const editingActivity = projectActivities.find(
+    (activity) => activity.id === editingActivityId,
+  );
+
+  // Every elaboration edit writes the block document and mirrors its prose
+  // into context, which the publish payload and blocker checks still read.
+  const commitBlocks = (next: ElaborationBlock[]) => {
+    const text = elaborationText(next);
+    onChange({
+      elaborationBlocks: next,
+      context: text,
+      elaborationState: text
+        ? statement.elaborationState === "Empty"
+          ? "Draft"
+          : statement.elaborationState
+        : "Empty",
+    });
+  };
+
+  const moveElabBlock = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= blocks.length) return;
+    const next = [...blocks];
+    [next[index], next[target]] = [next[target], next[index]];
+    commitBlocks(next);
+  };
+
+  const addElabText = () => {
+    commitBlocks([...blocks, { kind: "text", id: uid("eb"), text: "" }]);
+  };
+
+  const addElabActivity = () => {
+    const activityId = uid("act");
+    addActivity({
+      id: activityId,
+      projectId: statement.projectId,
+      statementId: statement.id,
+      mode: "Flashcard",
+      prompt: "",
+      status: "Draft",
+      aiSuggested: false,
+    });
+    commitBlocks([...blocks, { kind: "activity", id: uid("eb"), activityId }]);
+    setEditingActivityId(activityId);
+  };
+
+  const removeElabBlock = (block: ElaborationBlock) => {
+    commitBlocks(blocks.filter((item) => item.id !== block.id));
+    if (block.kind === "activity") {
+      removeActivity(block.activityId);
+      notify("Activity removed from elaboration");
+    }
+  };
+
   return (
+    <>
     <Modal eyebrow={`Statement · anchor ${statement.anchor}`} title="Statement & elaboration" width={640} onClose={onClose}>
       <FieldLabel>Statement text — large type in the consumer summary</FieldLabel>
       <textarea
@@ -1420,25 +1525,75 @@ function StatementModal({
           borderTop: "1px solid var(--line)",
         }}
       >
-        <Eyebrow style={{ fontSize: 9, marginBottom: 8 }}>Elaboration layer</Eyebrow>
-        <FieldLabel>Why this matters — plain-language context</FieldLabel>
-        <textarea
-          value={statement.context}
-          onChange={(event) =>
-            onChange({
-              context: event.target.value,
-              elaborationState: event.target.value.trim()
-                ? statement.elaborationState === "Empty"
-                  ? "Draft"
-                  : statement.elaborationState
-                : "Empty",
-            })
-          }
-          rows={3}
-          style={textareaStyle}
-          placeholder="Context, implications, qualifications, uncertainty"
-        />
-        <div style={{ marginTop: 10 }}>
+        <Eyebrow style={{ fontSize: 9, marginBottom: 8 }}>
+          Elaboration layer — this statement's own document
+        </Eyebrow>
+        <FieldLabel>
+          Stack elaboration text and activities below — they render in order on the
+          statement's screen
+        </FieldLabel>
+
+        {blocks.length === 0 ? (
+          <div
+            style={{
+              padding: 13,
+              borderRadius: 14,
+              border: "1px dashed var(--line)",
+              background: "var(--paper-muted)",
+              fontSize: 11,
+              color: "var(--muted)",
+              marginTop: 4,
+            }}
+          >
+            Empty elaboration — the statement cannot publish as tappable until it has
+            elaboration text.
+          </div>
+        ) : (
+          blocks.map((block, index) => (
+            <ElaborationBlockRow
+              key={block.id}
+              block={block}
+              index={index}
+              count={blocks.length}
+              activity={
+                block.kind === "activity"
+                  ? projectActivities.find((item) => item.id === block.activityId)
+                  : undefined
+              }
+              onEditText={(text) =>
+                commitBlocks(
+                  blocks.map((item) =>
+                    item.id === block.id && item.kind === "text" ? { ...item, text } : item,
+                  ),
+                )
+              }
+              onOpenActivity={() =>
+                block.kind === "activity" && setEditingActivityId(block.activityId)
+              }
+              onMove={(direction) => moveElabBlock(index, direction)}
+              onRemove={() => removeElabBlock(block)}
+            />
+          ))
+        )}
+
+        <Row gap={8} wrap style={{ marginTop: 8 }}>
+          <PrimaryButton
+            small
+            variant="light"
+            icon={<AlignLeft size={13} />}
+            label="Elaboration text"
+            onClick={addElabText}
+          />
+          <PrimaryButton
+            small
+            variant="light"
+            icon={<Puzzle size={13} />}
+            label="Activity"
+            onClick={addElabActivity}
+          />
+        </Row>
+
+        <div style={{ marginTop: 14 }}>
           <FieldLabel>Source moment — quoted for internal verification only</FieldLabel>
           <input
             value={statement.sourceMoment}
@@ -1486,6 +1641,153 @@ function StatementModal({
       </div>
       <ModalFooter onRemove={onRemove} onClose={onClose} removeLabel="Remove statement" />
     </Modal>
+
+    {editingActivity ? (
+      <ActivityModal
+        activity={editingActivity}
+        statements={[statement]}
+        lockedToStatement={statement}
+        onChange={(patch) => updateActivity(editingActivity.id, patch)}
+        onRemove={() => {
+          commitBlocks(
+            blocks.filter(
+              (item) =>
+                !(item.kind === "activity" && item.activityId === editingActivity.id),
+            ),
+          );
+          removeActivity(editingActivity.id);
+          setEditingActivityId(undefined);
+          notify("Activity removed from elaboration");
+        }}
+        onClose={() => setEditingActivityId(undefined)}
+      />
+    ) : null}
+    </>
+  );
+}
+
+/**
+ * One row of the statement's elaboration mini-composer: prose edits inline,
+ * activities open the full activity editor on top.
+ */
+function ElaborationBlockRow({
+  block,
+  index,
+  count,
+  activity,
+  onEditText,
+  onOpenActivity,
+  onMove,
+  onRemove,
+}: {
+  block: ElaborationBlock;
+  index: number;
+  count: number;
+  activity?: ActivityDraft;
+  onEditText: (text: string) => void;
+  onOpenActivity: () => void;
+  onMove: (direction: -1 | 1) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Card style={{ marginBottom: 8, padding: 0, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "stretch" }}>
+        {block.kind === "text" ? (
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+              padding: "11px 0 11px 12px",
+            }}
+          >
+            <BlockIcon>
+              <AlignLeft size={14} color="var(--muted)" />
+            </BlockIcon>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Eyebrow style={{ fontSize: 8, color: "var(--subtle)" }}>
+                Elaboration text
+              </Eyebrow>
+              <textarea
+                value={block.text}
+                onChange={(event) => onEditText(event.target.value)}
+                rows={3}
+                style={{ ...textareaStyle, marginTop: 5 }}
+                placeholder="Context, implications, qualifications, uncertainty"
+              />
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={onOpenActivity}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "11px 0 11px 12px",
+              cursor: "pointer",
+            }}
+          >
+            <BlockIcon tone="forest">
+              <Puzzle size={14} color="var(--white)" />
+            </BlockIcon>
+            {activity ? (
+              <>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Eyebrow style={{ fontSize: 8, color: "var(--subtle)" }}>
+                    Activity · {activity.mode}
+                  </Eyebrow>
+                  <div
+                    style={{
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      marginTop: 3,
+                      overflow: "hidden",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      color: activity.prompt ? "var(--ink)" : "var(--subtle)",
+                    }}
+                  >
+                    {activity.prompt || "Empty activity — click to author"}
+                  </div>
+                </div>
+                <StatusPill value={activity.status} />
+              </>
+            ) : (
+              <span style={{ fontSize: 12, color: "var(--danger)" }}>
+                Missing activity record
+              </span>
+            )}
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            gap: 3,
+            padding: "8px 10px",
+            flexShrink: 0,
+          }}
+        >
+          <RowIconButton disabled={index === 0} onClick={() => onMove(-1)}>
+            <ArrowUp size={12} style={{ opacity: index === 0 ? 0.3 : 1 }} />
+          </RowIconButton>
+          <RowIconButton disabled={index === count - 1} onClick={() => onMove(1)}>
+            <ArrowDown size={12} style={{ opacity: index === count - 1 ? 0.3 : 1 }} />
+          </RowIconButton>
+          <RowIconButton onClick={onRemove} title="Remove from elaboration">
+            <Trash2 size={12} />
+          </RowIconButton>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -1493,19 +1795,23 @@ const MODE_HINTS: Record<ActivityMode, string> = {
   Flashcard: "Prompt, expected concept, and a reveal explanation with source link.",
   "Applied quiz": "Options with one defensible answer and explanatory feedback.",
   Matching: "Concept-to-example pairs with a non-drag accessibility alternative.",
-  Poll: "Non-scored perspective prompt with transparent result presentation.",
+  Poll:
+    "Non-scored perspective prompt. Renders on the statement's screen from an elaboration, or on the summary screen from the summary document; the reader's choice stays on their device and the explanation shows after they answer.",
   Prediction: "Objectively resolvable question operated under separate market controls.",
 };
 
 function ActivityModal({
   activity,
   statements,
+  lockedToStatement,
   onChange,
   onRemove,
   onClose,
 }: {
   activity?: ActivityDraft;
   statements: AdminStatement[];
+  /** Set when editing from inside a statement's elaboration — the link is structural there. */
+  lockedToStatement?: AdminStatement;
   onChange: (patch: Partial<ActivityDraft>) => void;
   onRemove: () => void;
   onClose: () => void;
@@ -1539,7 +1845,7 @@ function ActivityModal({
       <Row gap={6} wrap>
         {[
           ...ACTIVITY_MODES,
-          // Keep an existing Poll/Prediction draft's mode visible instead of
+          // Keep an existing Prediction draft's mode visible instead of
           // silently deselecting authors' work.
           ...UNPUBLISHABLE_ACTIVITY_MODES.filter((mode) => mode === activity.mode),
         ].map((mode) => (
@@ -1571,7 +1877,8 @@ function ActivityModal({
           }}
         >
           {activity.mode} activities are not part of the consumer contract and
-          will not publish. Switch to Flashcard, Applied quiz, or Matching.
+          will not publish. Switch to Flashcard, Applied quiz, Matching, or
+          Poll.
         </div>
       ) : null}
 
@@ -1590,19 +1897,39 @@ function ActivityModal({
       />
 
       <div style={{ marginTop: 12 }}>
-        <FieldLabel>Linked statement — required for publication</FieldLabel>
-        <select
-          value={activity.statementId}
-          onChange={(event) => onChange({ statementId: event.target.value })}
-          style={inputStyle}
-        >
-          <option value="">Not linked yet</option>
-          {statements.map((statement) => (
-            <option key={statement.id} value={statement.id}>
-              {statement.text.slice(0, 60)}
-            </option>
-          ))}
-        </select>
+        {lockedToStatement ? (
+          <>
+            <FieldLabel>Lives in this statement's elaboration</FieldLabel>
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                background: "var(--paper-muted)",
+                fontSize: 12,
+                color: "var(--muted)",
+                lineHeight: 1.5,
+              }}
+            >
+              {lockedToStatement.text.slice(0, 90)}
+            </div>
+          </>
+        ) : (
+          <>
+            <FieldLabel>Linked statement — required for publication</FieldLabel>
+            <select
+              value={activity.statementId}
+              onChange={(event) => onChange({ statementId: event.target.value })}
+              style={inputStyle}
+            >
+              <option value="">Not linked yet</option>
+              {statements.map((statement) => (
+                <option key={statement.id} value={statement.id}>
+                  {statement.text.slice(0, 60)}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
       </div>
 
       <div
@@ -2652,7 +2979,7 @@ function ImportMarkdownModal({
                   ) : null}
                   {statement ? <TypeBadge type={statement.type} /> : null}
                   {activity ? (
-                    <span className="pill" style={{ background: "var(--forest)", color: "var(--white)" }}>
+                    <span className="pill" style={{ background: "rgba(227,192,141,0.16)", color: "var(--champagne)" }}>
                       {activity.mode}
                     </span>
                   ) : null}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { auditEvents, people } from "../data";
+import { PREDICTION_MARKETS_ENABLED } from "../flags";
 import { useApp } from "../state";
 import { Avatar, Card, Eyebrow, PrimaryButton, Row, StatusPill } from "../ui";
 
@@ -8,7 +9,7 @@ const TABS = ["People & roles", "Organizations", "Taxonomies", "Feature controls
 const featureFlags = [
   { name: "Comments", scope: "Per release", state: true, note: "Independent of publish state" },
   { name: "Learning activities", scope: "Per release", state: true, note: "Answer keys require approval" },
-  { name: "Predictions & tokens", scope: "Per release + country", state: true, note: "Age and country gates enforced server-side" },
+  { name: "Predictions & tokens", scope: "Per release + country", state: PREDICTION_MARKETS_ENABLED, note: "Disabled with prediction markets — cut from consumer v1" },
   { name: "Embedded media playback", scope: "Per rights record", state: true, note: "Driven by rights, not URLs" },
   { name: "Creator submissions", scope: "Platform", state: false, note: "Deferred — organizations model ready" },
   { name: "Public preview links", scope: "Platform", state: false, note: "V1 uses expiring internal links only" },

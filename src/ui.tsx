@@ -25,30 +25,30 @@ export const typeVisuals: Record<
 };
 
 const stateTones: Record<string, { bg: string; fg: string }> = {
-  Draft: { bg: "var(--paper-muted)", fg: "var(--muted)" },
+  Draft: { bg: "var(--panel-strong)", fg: "var(--muted)" },
   Processing: { bg: "var(--blue)", fg: "var(--blue-dark)" },
-  Blocked: { bg: "#F3DAD7", fg: "var(--danger)" },
+  Blocked: { bg: "var(--danger-fill)", fg: "var(--danger)" },
   "Ready for review": { bg: "var(--purple)", fg: "var(--purple-dark)" },
   "In review": { bg: "var(--purple)", fg: "var(--purple-dark)" },
   "Changes requested": { bg: "var(--peach)", fg: "var(--peach-dark)" },
   Approved: { bg: "var(--lime)", fg: "var(--lime-dark)" },
   Scheduled: { bg: "var(--blue)", fg: "var(--blue-dark)" },
-  Published: { bg: "var(--forest)", fg: "var(--white)" },
-  Live: { bg: "var(--forest)", fg: "var(--white)" },
+  Published: { bg: "var(--forest)", fg: "var(--forest-dark)" },
+  Live: { bg: "var(--forest)", fg: "var(--forest-dark)" },
   Publishing: { bg: "var(--blue)", fg: "var(--blue-dark)" },
   Corrected: { bg: "var(--peach)", fg: "var(--peach-dark)" },
   Withdrawn: { bg: "var(--paper-muted)", fg: "var(--muted)" },
   Archived: { bg: "var(--paper-muted)", fg: "var(--subtle)" },
-  Failed: { bg: "#F3DAD7", fg: "var(--danger)" },
+  Failed: { bg: "var(--danger-fill)", fg: "var(--danger)" },
   "Rolled back": { bg: "var(--paper-muted)", fg: "var(--muted)" },
   "Not started": { bg: "var(--paper-muted)", fg: "var(--subtle)" },
   Open: { bg: "var(--lime)", fg: "var(--lime-dark)" },
   Closing: { bg: "var(--peach)", fg: "var(--peach-dark)" },
   "Awaiting resolution": { bg: "var(--peach)", fg: "var(--peach-dark)" },
-  Disputed: { bg: "#F3DAD7", fg: "var(--danger)" },
-  Resolved: { bg: "var(--forest)", fg: "var(--white)" },
+  Disputed: { bg: "var(--danger-fill)", fg: "var(--danger)" },
+  Resolved: { bg: "var(--forest)", fg: "var(--forest-dark)" },
   Void: { bg: "var(--paper-muted)", fg: "var(--muted)" },
-  New: { bg: "#F3DAD7", fg: "var(--danger)" },
+  New: { bg: "var(--danger-fill)", fg: "var(--danger)" },
   Actioned: { bg: "var(--lime)", fg: "var(--lime-dark)" },
   Appealed: { bg: "var(--purple)", fg: "var(--purple-dark)" },
   Closed: { bg: "var(--paper-muted)", fg: "var(--muted)" },
@@ -60,15 +60,15 @@ const stateTones: Record<string, { bg: string; fg: string }> = {
   Cleared: { bg: "var(--lime)", fg: "var(--lime-dark)" },
   "Pending review": { bg: "var(--peach)", fg: "var(--peach-dark)" },
   Expiring: { bg: "var(--peach)", fg: "var(--peach-dark)" },
-  Missing: { bg: "#F3DAD7", fg: "var(--danger)" },
-  Restricted: { bg: "#F3DAD7", fg: "var(--danger)" },
+  Missing: { bg: "var(--danger-fill)", fg: "var(--danger)" },
+  Restricted: { bg: "var(--danger-fill)", fg: "var(--danger)" },
   Active: { bg: "var(--lime)", fg: "var(--lime-dark)" },
   Invited: { bg: "var(--blue)", fg: "var(--blue-dark)" },
-  Suspended: { bg: "#F3DAD7", fg: "var(--danger)" },
-  Blocker: { bg: "#F3DAD7", fg: "var(--danger)" },
+  Suspended: { bg: "var(--danger-fill)", fg: "var(--danger)" },
+  Blocker: { bg: "var(--danger-fill)", fg: "var(--danger)" },
   Major: { bg: "var(--peach)", fg: "var(--peach-dark)" },
   Minor: { bg: "var(--paper-muted)", fg: "var(--muted)" },
-  High: { bg: "#F3DAD7", fg: "var(--danger)" },
+  High: { bg: "var(--danger-fill)", fg: "var(--danger)" },
   Medium: { bg: "var(--peach)", fg: "var(--peach-dark)" },
   Low: { bg: "var(--paper-muted)", fg: "var(--muted)" },
 };
@@ -84,11 +84,26 @@ export function StatusPill({ value }: { value: string }) {
 
 export function TypeBadge({ type }: { type: StatementType }) {
   const visual = typeVisuals[type];
+  // Nocturne type row: dot in the type colour beside a tracked micro label.
   return (
     <span
       className="pill"
-      style={{ background: visual.strong, color: "var(--white)", letterSpacing: "1.1px" }}
+      style={{
+        padding: "4px 2px",
+        color: visual.strong,
+        letterSpacing: "1.8px",
+        gap: 7,
+      }}
     >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          background: visual.strong,
+          flexShrink: 0,
+        }}
+      />
       {visual.label}
     </span>
   );
@@ -183,9 +198,15 @@ export function Avatar({
   tone?: "forest" | "paper" | "lime";
 }) {
   const bg =
-    tone === "forest" ? "var(--forest)" : tone === "lime" ? "var(--lime)" : "var(--paper-muted)";
+    tone === "forest"
+      ? "var(--champagne)"
+      : tone === "lime"
+        ? "var(--champagne)"
+        : "var(--panel-strong)";
   const fg =
-    tone === "forest" ? "var(--white)" : tone === "lime" ? "var(--forest-dark)" : "var(--muted)";
+    tone === "forest" || tone === "lime"
+      ? "var(--ground-deep)"
+      : "var(--ink-soft)";
   return (
     <span
       style={{
@@ -296,11 +317,12 @@ export function FieldLabel({ children }: PropsWithChildren) {
 
 export const inputStyle: CSSProperties = {
   width: "100%",
-  background: "var(--paper)",
-  border: "1px solid var(--line)",
+  background: "rgba(234,246,245,0.08)",
+  border: "1px solid var(--outline-dim)",
   borderRadius: 12,
   padding: "9px 11px",
   fontSize: 13,
+  color: "var(--ink)",
   outline: "none",
 };
 
@@ -327,13 +349,17 @@ export function PrimaryButton({
   small?: boolean;
 }) {
   const styles: Record<string, CSSProperties> = {
-    dark: { background: "var(--forest)", color: "var(--white)" },
-    lime: { background: "var(--lime-dark)", color: "var(--white)" },
-    danger: { background: "var(--danger)", color: "var(--white)" },
+    dark: { background: "var(--magenta)", color: "var(--magenta-on)" },
+    lime: { background: "var(--champagne)", color: "var(--ground-deep)" },
+    danger: {
+      background: "var(--danger-fill)",
+      color: "var(--rose-light)",
+      border: "1px solid var(--rose)",
+    },
     light: {
-      background: "var(--paper)",
-      color: "var(--forest)",
-      border: "1px solid var(--line)",
+      background: "transparent",
+      color: "var(--ink)",
+      border: "1px solid var(--outline)",
     },
   };
   return (
@@ -342,7 +368,7 @@ export function PrimaryButton({
       disabled={disabled}
       style={{
         minHeight: small ? 34 : 44,
-        borderRadius: small ? 12 : 15,
+        borderRadius: small ? 12 : 14,
         padding: small ? "0 13px" : "0 18px",
         display: "inline-flex",
         alignItems: "center",
@@ -414,18 +440,26 @@ export function SplitButton({
   }, [open]);
 
   const styles: Record<string, CSSProperties> = {
-    dark: { background: "var(--forest)", color: "var(--white)" },
-    lime: { background: "var(--lime-dark)", color: "var(--white)" },
-    danger: { background: "var(--danger)", color: "var(--white)" },
+    dark: { background: "var(--magenta)", color: "var(--magenta-on)" },
+    lime: { background: "var(--champagne)", color: "var(--ground-deep)" },
+    danger: {
+      background: "var(--danger-fill)",
+      color: "var(--rose-light)",
+      border: "1px solid var(--rose)",
+    },
     light: {
-      background: "var(--paper)",
-      color: "var(--forest)",
-      border: "1px solid var(--line)",
+      background: "transparent",
+      color: "var(--ink)",
+      border: "1px solid var(--outline)",
     },
   };
   const tone = styles[variant];
   const divider =
-    variant === "light" ? "var(--line)" : "rgba(255, 255, 255, 0.24)";
+    variant === "light"
+      ? "var(--outline-dim)"
+      : variant === "lime"
+        ? "rgba(6, 35, 43, 0.24)"
+        : "rgba(255, 255, 255, 0.24)";
 
   return (
     <div ref={wrapRef} style={{ position: "relative", display: "inline-flex" }}>
@@ -490,10 +524,10 @@ export function SplitButton({
             right: 0,
             zIndex: 40,
             minWidth: 244,
-            background: "var(--white)",
-            border: "1px solid var(--line)",
+            background: "var(--paper)",
+            border: "1px solid var(--hairline)",
             borderRadius: 14,
-            boxShadow: "0 12px 30px rgba(20, 40, 30, 0.14)",
+            boxShadow: "0 12px 30px rgba(2, 20, 25, 0.45)",
             padding: 5,
           }}
         >
@@ -525,7 +559,7 @@ export function SplitButton({
                 event.currentTarget.style.background = "none";
               }}
             >
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--forest)" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--champagne)" }}>
                 {item.label}
               </div>
               {item.detail ? (
@@ -580,7 +614,7 @@ export function Modal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(23,33,28,0.30)",
+        background: "rgba(2, 20, 25, 0.6)",
         zIndex: 80,
         display: "flex",
         alignItems: "flex-start",
@@ -597,7 +631,8 @@ export function Modal({
           maxWidth: "94vw",
           borderRadius: 24,
           padding: 22,
-          boxShadow: "var(--shadow)",
+          background: "var(--paper)",
+          boxShadow: "0 20px 50px rgba(2, 20, 25, 0.5)",
         }}
       >
         {eyebrow ? <Eyebrow style={{ fontSize: 9 }}>{eyebrow}</Eyebrow> : null}

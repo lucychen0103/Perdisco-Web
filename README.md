@@ -14,9 +14,14 @@ npm install
 npm run dev
 ```
 
-Opens on http://localhost:5175. All data is seeded in-memory (`src/data.ts`) — no
-backend yet; mutations (statement editing, gate approvals, releases, moderation,
-market resolution) update client state so every workflow is walkable end to end.
+Opens on http://localhost:5175. With Supabase configured (`.env.local`), the
+database is the source of truth for drafts: sign in with an editorial account,
+the workspace hydrates from `editorial.workspace_docs`, and every mutation
+(statement editing, gate approvals, releases, moderation, market resolution)
+persists back automatically, debounced, via the `admin_*_workspace` RPCs. On a
+first run against a database that already holds published summaries, drafts are
+rebuilt from the published projection. Without Supabase configured the app
+falls back to in-memory state seeded from `src/data.ts`, lost on reload.
 
 ## Map to the PRD
 
