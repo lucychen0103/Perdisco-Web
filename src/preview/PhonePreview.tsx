@@ -6,6 +6,7 @@ import {
   Play,
 } from "lucide-react";
 import { elaborationBlocksOf } from "../lib/elaboration";
+import { RichText } from "./RichText";
 import type {
   ActivityDraft,
   ActivityMode,
@@ -169,7 +170,11 @@ export function SummaryPreview({
         <div style={{ paddingTop: 8 }}>
           {project.blocks.map((block) => {
             if (block.kind === "text") {
-              return <Prose key={block.id}>{block.text}</Prose>;
+              return (
+                <Prose key={block.id}>
+                  <RichText>{block.text}</RichText>
+                </Prose>
+              );
             }
             if (block.kind === "statement") {
               const statement = statementFor(block);
@@ -215,7 +220,8 @@ export function SummaryPreview({
                       lineHeight: 1.4,
                     }}
                   >
-                    {statement.text}
+                    {/* Row keeps the tap, like the app's StatementBlock. */}
+                    <RichText links={false}>{statement.text}</RichText>
                   </span>
                 </button>
               );
@@ -361,7 +367,7 @@ export function ElaborationPreview({
             marginTop: 14,
           }}
         >
-          {statement.text}
+          <RichText>{statement.text}</RichText>
         </div>
 
         {!hasProse ? (
@@ -391,7 +397,7 @@ export function ElaborationPreview({
                   marginTop: 14,
                 }}
               >
-                {block.text}
+                <RichText>{block.text}</RichText>
               </div>
             );
           }
@@ -434,7 +440,7 @@ export function ElaborationPreview({
               marginTop: 10,
             }}
           >
-            “{statement.sourceMoment}”
+            <RichText>{`“${statement.sourceMoment}”`}</RichText>
           </div>
           {project.medium === "audio" || project.medium === "video" ? (
             <div
