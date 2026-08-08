@@ -4,6 +4,7 @@ import type {
   ActivityDraft,
   ActivityMode,
   AdminStatement,
+  ReleaseState,
   SourceProject,
   StatementType,
 } from "../types";
@@ -192,6 +193,36 @@ export async function publishProject(
   const { data, error } = await supabase.rpc("admin_publish_summary", { payload });
   if (error) throw new Error(error.message);
   return data as PublishResult;
+}
+
+/** One row of publishing.releases, joined with version and source display fields. */
+export type ReleaseRecord = {
+  releaseId: string;
+  summaryKey: string;
+  versionNumber: number;
+  state: ReleaseState;
+  cohort: string;
+  publishedAt: string;
+  publishedBy: string | null;
+  note: string | null;
+  title: string;
+  shortTitle: string;
+  initials: string;
+  gradientFrom: string;
+  gradientTo: string;
+};
+
+/**
+ * The database's view of release state, newest first. This is the same
+ * publishing.releases the consumer projection reads, so a row's state here is
+ * exactly what the mobile app sees: one Live release per summary, priors
+ * demoted to Corrected by each publish.
+ */
+export async function listReleases(): Promise<ReleaseRecord[]> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { data, error } = await supabase.rpc("admin_list_releases");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ReleaseRecord[];
 }
 
 export type WithdrawResult =

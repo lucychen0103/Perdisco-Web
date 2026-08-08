@@ -104,7 +104,13 @@ type AppState = {
   setFindingState: (id: string, state: Finding["state"]) => void;
   updateCase: (id: string, patch: Partial<ModerationCase>) => void;
   updateMarket: (id: string, patch: Partial<AdminMarket>) => void;
-  updateRelease: (id: string, patch: Partial<Release>) => void;
+  /**
+   * Drops local release rows that fail the predicate. Local rows are only the
+   * scheduling queue — real release history lives in publishing.releases and is
+   * fetched by the Publishing page — so this is how fulfilled or stale queue
+   * entries leave the workspace.
+   */
+  pruneReleases: (keep: (release: Release) => boolean) => void;
   addRelease: (release: Release) => void;
 };
 
@@ -513,10 +519,10 @@ export function AppProvider({ children }: PropsWithChildren) {
     );
   }, []);
 
-  const updateRelease = useCallback((id: string, patch: Partial<Release>) => {
-    setReleases((prev) =>
-      prev.map((release) => (release.id === id ? { ...release, ...patch } : release)),
-    );
+  const pruneReleases = useCallback((keep: (release: Release) => boolean) => {
+    // Keep the same array when nothing matches so callers can invoke this
+    // after every history refresh without churning state or persistence.
+    setReleases((prev) => (prev.every(keep) ? prev : prev.filter(keep)));
   }, []);
 
   const addRelease = useCallback((release: Release) => {
@@ -569,7 +575,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       setFindingState,
       updateCase,
       updateMarket,
-      updateRelease,
+      pruneReleases,
       addRelease,
     }),
     [
@@ -604,7 +610,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       setFindingState,
       updateCase,
       updateMarket,
-      updateRelease,
+      pruneReleases,
       addRelease,
     ],
   );

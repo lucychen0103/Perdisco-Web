@@ -249,16 +249,8 @@ export async function backfillFromPublished(): Promise<WorkspaceSnapshot | null>
     snapshot.projects.push(projectFromRow(row, blocks));
     snapshot.statements.push(...statements.map((s) => statementFromRow(row, s)));
     snapshot.activities.push(...activities.map((a) => activityFromRow(row, a)));
-    snapshot.releases.push({
-      id: row.release_id,
-      projectId: row.summary_id,
-      version: row.version_number,
-      state: "Live",
-      when: new Date(row.published_at).toLocaleString(),
-      publisher: "—",
-      cohort: row.cohort,
-      health: "Healthy",
-    });
+    // No release rows: the Publishing page reads release history straight from
+    // publishing.releases, so synthesizing local copies here would only drift.
   }
 
   return snapshot;

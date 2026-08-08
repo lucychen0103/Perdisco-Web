@@ -97,9 +97,8 @@ export function ProjectDetailPage({ id }: { id: string }) {
     markets,
     setFindingState,
     notify,
-    releases,
     addRelease,
-    updateRelease,
+    pruneReleases,
     importDocument,
   } = useApp();
 
@@ -328,16 +327,10 @@ export function ProjectDetailPage({ id }: { id: string }) {
         version: result.versionNumber,
         updatedAt: "Just now",
       });
-      addRelease({
-        id: uid("r"),
-        projectId: project.id,
-        version: result.versionNumber,
-        state: "Live",
-        when: "Just now",
-        publisher,
-        cohort: "All users",
-        health: "Healthy",
-      });
+      // No local release row: the Publishing page reads real state from
+      // publishing.releases. A queued entry for this project is superseded by
+      // publishing directly, so drop it.
+      pruneReleases((release) => release.projectId !== project.id);
       notify(
         `Published v${result.versionNumber} — ${result.statementCount} statements, ${result.activityCount} activities live`,
       );
@@ -421,9 +414,10 @@ export function ProjectDetailPage({ id }: { id: string }) {
         return;
       }
       updateProject(project.id, { state: "Withdrawn", updatedAt: "Just now" });
-      releases
-        .filter((release) => release.projectId === project.id && release.state === "Live")
-        .forEach((release) => updateRelease(release.id, { state: "Withdrawn" }));
+      // Release rows are database-owned; the Publishing page will show the
+      // Withdrawn state on its next fetch. Only a stale local queue entry
+      // needs clearing — releasing it later would republish withdrawn content.
+      pruneReleases((release) => release.projectId !== project.id);
       notify(
         `Withdrawn — ${result.withdrawnReleases} release${
           result.withdrawnReleases === 1 ? "" : "s"

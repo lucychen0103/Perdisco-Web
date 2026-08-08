@@ -11,7 +11,7 @@ import { Card, Eyebrow, FieldLabel, PrimaryButton, Row, inputStyle } from "../ui
  * visible in the mobile app. Publication is append-only: each press creates a new
  * immutable version and release rather than editing live content.
  */
-export function PublishPanel() {
+export function PublishPanel({ onPublished }: { onPublished?: () => void }) {
   const { projects, statementsFor, activitiesFor, notify } = useApp();
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
@@ -69,6 +69,7 @@ export function PublishPanel() {
       notify(
         `Published ${project.shortTitle} v${result.versionNumber} · ${result.statementCount} statements · ${result.activityCount ?? 0} activities live`,
       );
+      onPublished?.();
     } catch (publishError) {
       setError((publishError as Error).message);
     } finally {
